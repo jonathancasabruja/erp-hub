@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Casa Bruja ERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0f1115;
+        --bg-soft: #171a21;
+        --card: #1f232c;
+        --card-hover: #272c37;
+        --border: #2a2f3a;
+        --text: #e6e9ef;
+        --text-dim: #9aa3b2;
+        --accent: #f59e0b;
+        --accent-hover: #fbbf24;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 64px 32px 96px;
+      }
+      header {
+        text-align: center;
+        margin-bottom: 56px;
+      }
+      .logo {
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: 42px;
+        font-weight: 700;
+        margin: 0 0 12px;
+        letter-spacing: -0.02em;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 17px;
+        margin: 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 20px;
+      }
+      .card {
+        display: block;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 28px 24px;
+        text-decoration: none;
+        color: inherit;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          transform 0.15s ease;
+      }
+      .card:hover {
+        background: var(--card-hover);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+      }
+      .card .icon {
+        font-size: 28px;
+        margin-bottom: 16px;
+      }
+      .card h2 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 6px;
+      }
+      .card p {
+        color: var(--text-dim);
+        font-size: 14px;
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+      .card .url {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .card:hover .url {
+        color: var(--accent-hover);
+      }
+      footer {
+        text-align: center;
+        margin-top: 64px;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 32px;
+        }
+        .wrap {
+          padding: 48px 20px 64px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="logo">Casa Bruja</div>
+        <h1>ERP</h1>
+        <p class="subtitle">Sistema unificado de gestión</p>
+      </header>
+
+      <div class="grid">
+        <a class="card" href="https://recibos-banco-production.up.railway.app">
+          <div class="icon">🏦</div>
+          <h2>Recibos Banco</h2>
+          <p>Conciliación bancaria del Taproom. Carga recibos Z y estados de cuenta.</p>
+          <span class="url">Abrir &rarr;</span>
+        </a>
+
+        <a class="card" href="https://brewerydashboard-production.up.railway.app">
+          <div class="icon">🍺</div>
+          <h2>Brewery Dashboard</h2>
+          <p>Producción, inventario y seguimiento de lotes de cerveza.</p>
+          <span class="url">Abrir &rarr;</span>
+        </a>
+
+        <a class="card" href="https://facturacion-cb-production.up.railway.app">
+          <div class="icon">🧾</div>
+          <h2>Facturación</h2>
+          <p>Visor de ventas y procesamiento de exports del POS.</p>
+          <span class="url">Abrir &rarr;</span>
+        </a>
+
+        <a class="card" href="https://compras-y-personal-production.up.railway.app">
+          <div class="icon">📋</div>
+          <h2>Compras y Personal</h2>
+          <p>Órdenes de compra y gestión de pagos a colaboradores.</p>
+          <span class="url">Abrir &rarr;</span>
+        </a>
+      </div>
+
+      <footer>Casa Bruja &middot; Panamá</footer>
+    </div>
+  </body>
+</html>
