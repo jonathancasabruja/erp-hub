@@ -327,22 +327,85 @@
         outline: none;
         border-color: var(--accent);
       }
-      .perms-grid {
-        display: grid;
-        grid-template-columns: 1fr 120px;
-        gap: 6px;
-        padding: 8px;
+      /* Per-app permission cards in the dialog */
+      .app-card {
         background: var(--bg-soft);
-        border-radius: 8px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
       }
-      .perms-grid .row-label {
+      .app-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .app-card-head .title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .app-card-head .sub {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .grant-group {
+        display: inline-flex;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .grant-group button {
+        background: transparent;
+        color: var(--text-dim);
+        border: none;
+        padding: 6px 12px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        border-right: 1px solid var(--border);
+      }
+      .grant-group button:last-child { border-right: none; }
+      .grant-group button.active {
+        background: var(--accent);
+        color: #1a1a1a;
+      }
+      .grant-group button.active.view { background: var(--cyan); color: #0a0f13; }
+      .grant-group button.active.edit { background: var(--green); color: #0a1a13; }
+      .grant-group button.active.none { background: #374151; color: var(--text); }
+      .app-card-detail-toggle {
+        font-size: 11px;
+        color: var(--accent);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px 0;
+        margin-top: 8px;
+        font-family: inherit;
+      }
+      .app-card-detail-toggle:hover { color: var(--accent-hover); }
+      .sections-grid {
+        display: none;
+        grid-template-columns: 1fr 140px;
+        gap: 6px 10px;
+        padding: 10px;
+        background: var(--card);
+        border-radius: 6px;
+        margin-top: 10px;
+      }
+      .sections-grid.open { display: grid; }
+      .sections-grid .row-label {
         font-size: 12px;
         color: var(--text-dim);
-        padding: 6px 4px;
         align-self: center;
       }
-      .perms-grid select {
-        background: var(--card);
+      .sections-grid select {
+        background: var(--bg-soft);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 4px;
@@ -563,12 +626,10 @@
 
         <div class="form-row">
           <label>Acceso por app</label>
-          <div id="f-apps" class="perms-grid"></div>
-        </div>
-
-        <div class="form-row">
-          <label>Permisos por sección (Facturación)</label>
-          <div id="f-perms" class="perms-grid"></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">
+            Da acceso al app completo, o click en "Detallar" para asignar permisos por menú.
+          </div>
+          <div id="f-app-cards"></div>
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;">
@@ -928,37 +989,116 @@
         document.getElementById("f-password-row").style.display = isNew ? "flex" : "none";
         document.getElementById("btn-delete-user").style.display = isNew ? "none" : "inline-block";
 
-        // Build per-app access dropdowns
+        // Build per-app permission cards. Each card has quick-grant buttons
+        // (none/view/edit) that cascade into the sections for that app,
+        // plus a "Detallar" toggle that reveals per-section dropdowns.
         const perms = user?.permissions || {};
         const apps = perms._apps || {};
-        const appsEl = document.getElementById("f-apps");
-        appsEl.innerHTML = (meta.apps || [])
-          .map(
-            (a) => `
-          <div class="row-label">${escapeHtml(a)}</div>
-          <select data-app="${escapeHtml(a)}">
-            <option value="none" ${(apps[a] || "none") === "none" ? "selected" : ""}>Sin acceso</option>
-            <option value="view" ${apps[a] === "view" ? "selected" : ""}>Solo ver</option>
-            <option value="edit" ${apps[a] === "edit" ? "selected" : ""}>Editar</option>
-          </select>
-        `
-          )
+        const appLabels = meta.appLabels || {};
+        const sectionsByApp = meta.sectionsByApp || {};
+
+        const cardsEl = document.getElementById("f-app-cards");
+        cardsEl.innerHTML = (meta.apps || [])
+          .map((app) => {
+            const level = apps[app] || "none";
+            const sections = sectionsByApp[app] || [];
+            const hasSections = sections.length > 0;
+            const label = appLabels[app] || app;
+
+            const sectionRows = sections
+              .map((s) => {
+                const v = perms[s.key] || "none";
+                return `
+                  <div class="row-label">${escapeHtml(s.label)}</div>
+                  <select data-section="${escapeHtml(s.key)}" data-app="${escapeHtml(app)}">
+                    <option value="none" ${v === "none" ? "selected" : ""}>Sin acceso</option>
+                    <option value="view" ${v === "view" ? "selected" : ""}>Solo ver</option>
+                    <option value="edit" ${v === "edit" ? "selected" : ""}>Editar</option>
+                  </select>
+                `;
+              })
+              .join("");
+
+            return `
+              <div class="app-card" data-app-card="${escapeHtml(app)}">
+                <div class="app-card-head">
+                  <div>
+                    <div class="title">${escapeHtml(label)}</div>
+                    <div class="sub">${hasSections ? sections.length + " menús" : "Acceso a nivel de app"}</div>
+                  </div>
+                  <div class="grant-group" data-grant-group="${escapeHtml(app)}">
+                    <button type="button" data-grant="none" class="${level === "none" ? "active none" : ""}">Sin acceso</button>
+                    <button type="button" data-grant="view" class="${level === "view" ? "active view" : ""}">Solo ver</button>
+                    <button type="button" data-grant="edit" class="${level === "edit" ? "active edit" : ""}">Editar todo</button>
+                  </div>
+                </div>
+                ${
+                  hasSections
+                    ? `<button type="button" class="app-card-detail-toggle" data-detail-toggle="${escapeHtml(app)}">
+                         ▸ Detallar por menú
+                       </button>
+                       <div class="sections-grid" data-sections-grid="${escapeHtml(app)}">${sectionRows}</div>`
+                    : ""
+                }
+              </div>
+            `;
+          })
           .join("");
 
-        // Build per-section permission dropdowns (facturación sections)
-        const permsEl = document.getElementById("f-perms");
-        permsEl.innerHTML = (meta.sections || [])
-          .map(
-            (s) => `
-          <div class="row-label">${escapeHtml(s)}</div>
-          <select data-section="${escapeHtml(s)}">
-            <option value="none" ${(perms[s] || "none") === "none" ? "selected" : ""}>Sin acceso</option>
-            <option value="view" ${perms[s] === "view" ? "selected" : ""}>Solo ver</option>
-            <option value="edit" ${perms[s] === "edit" ? "selected" : ""}>Editar</option>
-          </select>
-        `
-          )
-          .join("");
+        // Wire: quick-grant buttons cascade into the per-section selects.
+        cardsEl.querySelectorAll("[data-grant]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const group = btn.closest("[data-grant-group]");
+            const app = group.dataset.grantGroup;
+            const level = btn.dataset.grant;
+            // Toggle active on siblings
+            group.querySelectorAll("button").forEach((b) => {
+              b.classList.toggle("active", b === btn);
+              b.classList.remove("none", "view", "edit");
+              if (b === btn) b.classList.add(level);
+            });
+            // Cascade to section dropdowns of this app
+            const grid = cardsEl.querySelector(`[data-sections-grid="${CSS.escape(app)}"]`);
+            if (grid) {
+              grid.querySelectorAll("select").forEach((sel) => {
+                sel.value = level;
+              });
+            }
+          });
+        });
+
+        // Wire: "Detallar" toggle expand/collapse
+        cardsEl.querySelectorAll("[data-detail-toggle]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const app = btn.dataset.detailToggle;
+            const grid = cardsEl.querySelector(`[data-sections-grid="${CSS.escape(app)}"]`);
+            if (!grid) return;
+            const opening = !grid.classList.contains("open");
+            grid.classList.toggle("open");
+            btn.textContent = opening ? "▾ Ocultar detalle" : "▸ Detallar por menú";
+          });
+        });
+
+        // Wire: a per-section change should mark the parent app as "mixed"
+        // visually (de-highlight the quick-grant buttons) so the user can
+        // see they're overriding. We just clear the active class.
+        cardsEl.querySelectorAll("[data-sections-grid] select").forEach((sel) => {
+          sel.addEventListener("change", () => {
+            const app = sel.dataset.app;
+            const group = cardsEl.querySelector(`[data-grant-group="${CSS.escape(app)}"]`);
+            if (!group) return;
+            // Check if all selects in this app share the same value
+            const grid = cardsEl.querySelector(`[data-sections-grid="${CSS.escape(app)}"]`);
+            const vals = [...grid.querySelectorAll("select")].map((s) => s.value);
+            const allSame = vals.every((v) => v === vals[0]);
+            group.querySelectorAll("button").forEach((b) => {
+              b.classList.remove("active", "none", "view", "edit");
+              if (allSame && b.dataset.grant === vals[0]) {
+                b.classList.add("active", vals[0]);
+              }
+            });
+          });
+        });
 
         document.getElementById("user-dialog-backdrop").classList.add("open");
       }
@@ -988,14 +1128,21 @@
           return;
         }
 
-        // Collect permissions
+        // Collect permissions from the per-app cards.
+        // - App-level access: the active quick-grant button per card.
+        //   No active button = "none" (don't serialize).
+        // - Per-section overrides: each sections-grid dropdown; skip
+        //   ones set to "none".
         const perms = {};
-        document.querySelectorAll("#f-perms select").forEach((s) => {
-          if (s.value !== "none") perms[s.dataset.section] = s.value;
-        });
         const apps = {};
-        document.querySelectorAll("#f-apps select").forEach((s) => {
-          if (s.value !== "none") apps[s.dataset.app] = s.value;
+        document.querySelectorAll("[data-grant-group]").forEach((group) => {
+          const app = group.dataset.grantGroup;
+          const active = group.querySelector("button.active");
+          const level = active?.dataset.grant || "none";
+          if (level !== "none") apps[app] = level;
+        });
+        document.querySelectorAll("[data-sections-grid] select").forEach((sel) => {
+          if (sel.value !== "none") perms[sel.dataset.section] = sel.value;
         });
         if (Object.keys(apps).length > 0) perms._apps = apps;
 

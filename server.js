@@ -220,20 +220,48 @@ async function adminInvoiceLibrarySnapshot() {
 // mirror the shape here so the hub can manage users without round-tripping
 // through facturacion's tRPC. Both services read/write the same table.
 
-const SECTION_KEYS = [
-  "dashboard",
-  "pedidos",
-  "facturador",
-  "clientes",
-  "precios",
-  "productos",
-  "ruteo",
-  "catalogo",
-  "historial",
-  "vendedores",
-];
+// Sections grouped by the app they belong to. The UI uses this shape to
+// render per-app permission cards with quick-grant (sin acceso / ver /
+// editar) that also cascade to the sections within, OR expand to
+// fine-grained per-section control.
+//
+// Keep in sync with facturacion-cb/server/appUsersDb.ts SECTION_KEYS —
+// right now only facturación has wired-up sections; other apps only
+// check the _apps[app] level.
+const SECTIONS_BY_APP = {
+  facturacion: [
+    { key: "pedidos", label: "Pedidos" },
+    { key: "ruteo", label: "Ruteo (Kanban)" },
+    { key: "dashboard", label: "Dashboard de ventas" },
+    { key: "historial", label: "Historial" },
+    { key: "clientes", label: "Clientes" },
+    { key: "precios_cliente", label: "Precios por cliente" },
+    { key: "aliases", label: "Aliases de cerveza" },
+    { key: "facturador", label: "Facturador ERP" },
+    { key: "repositorio_facturas", label: "Repositorio facturas" },
+  ],
+  compras: [
+    // Sections defined for consistency; enforcement wired as compras grows.
+    { key: "purchase_orders", label: "Órdenes de compra" },
+    { key: "cost_invoices", label: "Fletes y gastos" },
+    { key: "invoice_library", label: "Repositorio de facturas" },
+    { key: "personal_eventual", label: "Personal eventual" },
+    { key: "servicios_profesionales", label: "Servicios profesionales" },
+  ],
+  brewery: [],
+  recibos: [],
+};
 
 const APP_KEYS = ["facturacion", "brewery", "compras", "recibos"];
+const APP_LABELS = {
+  facturacion: "Facturación",
+  brewery: "Brewery",
+  compras: "Compras & Personal",
+  recibos: "Recibos Banco",
+};
+// Flat union of all section keys across apps — the server accepts any of
+// these in the permissions payload.
+const SECTION_KEYS = Object.values(SECTIONS_BY_APP).flatMap((s) => s.map((x) => x.key));
 
 async function adminListUsers() {
   const sql = getSql();
@@ -449,7 +477,14 @@ const server = createServer(async (req, res) => {
           else if (path === "/api/admin/invoice-library-snapshot") data = await adminInvoiceLibrarySnapshot();
           else if (path === "/api/admin/po-snapshot") data = await adminPoSnapshot();
           else if (path === "/api/admin/users") data = await adminListUsers();
-          else if (path === "/api/admin/meta") data = { sections: SECTION_KEYS, apps: APP_KEYS };
+          else if (path === "/api/admin/meta")
+            data = {
+              apps: APP_KEYS,
+              appLabels: APP_LABELS,
+              sectionsByApp: SECTIONS_BY_APP,
+              // Legacy flat list kept for any caller still expecting it.
+              sections: SECTION_KEYS,
+            };
           else {
             res.writeHead(404, { "content-type": "application/json" });
             return res.end(JSON.stringify({ error: "unknown admin endpoint" }));
