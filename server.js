@@ -4,6 +4,7 @@ import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import postgres from "postgres";
+import bcrypt from "bcryptjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname);
@@ -214,6 +215,105 @@ async function adminInvoiceLibrarySnapshot() {
   };
 }
 
+// ─── App users (shared with facturacion via same Supabase DB) ──────────────
+// The canonical schema lives in facturacion-cb/server/appUsersDb.ts. We
+// mirror the shape here so the hub can manage users without round-tripping
+// through facturacion's tRPC. Both services read/write the same table.
+
+const SECTION_KEYS = [
+  "dashboard",
+  "pedidos",
+  "facturador",
+  "clientes",
+  "precios",
+  "productos",
+  "ruteo",
+  "catalogo",
+  "historial",
+  "vendedores",
+];
+
+const APP_KEYS = ["facturacion", "brewery", "compras", "recibos"];
+
+async function adminListUsers() {
+  const sql = getSql();
+  if (!sql) return null;
+  const rows = await sql`
+    SELECT id, email, display_name, role, permissions, active, must_change,
+           created_at, updated_at
+    FROM app_users
+    ORDER BY role DESC, email ASC
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    displayName: r.display_name,
+    role: r.role,
+    permissions: r.permissions || {},
+    active: r.active,
+    mustChange: r.must_change,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+async function adminCreateUser(input) {
+  const sql = getSql();
+  if (!sql) return null;
+  const { email, password, displayName, role, permissions, mustChange } = input;
+  if (!email || !password || !displayName) throw new Error("email, password, displayName required");
+  const hash = await bcrypt.hash(password, 10);
+  const [row] = await sql`
+    INSERT INTO app_users (email, password_hash, display_name, role, permissions, active, must_change)
+    VALUES (${email.toLowerCase()}, ${hash}, ${displayName},
+            ${role || "user"}, ${sql.json(permissions || {})}, true, ${mustChange !== false})
+    RETURNING id, email, display_name, role, permissions, active, must_change
+  `;
+  return row;
+}
+
+async function adminUpdateUser(id, patch) {
+  const sql = getSql();
+  if (!sql) return null;
+  // Build a snake_case object of only the fields the caller sent. Passing
+  // it through sql() generates the SET list safely.
+  const updates = {};
+  if (patch.email !== undefined) updates.email = patch.email.toLowerCase();
+  if (patch.displayName !== undefined) updates.display_name = patch.displayName;
+  if (patch.role !== undefined) updates.role = patch.role;
+  if (patch.permissions !== undefined) updates.permissions = patch.permissions;
+  if (patch.active !== undefined) updates.active = patch.active;
+  if (patch.mustChange !== undefined) updates.must_change = patch.mustChange;
+  if (Object.keys(updates).length === 0) return null;
+  updates.updated_at = new Date();
+  const [row] = await sql`
+    UPDATE app_users SET ${sql(updates)}
+    WHERE id = ${id}
+    RETURNING id, email, display_name, role, permissions, active, must_change
+  `;
+  return row;
+}
+
+async function adminResetUserPassword(id, newPassword, mustChange = true) {
+  const sql = getSql();
+  if (!sql) return null;
+  const hash = await bcrypt.hash(newPassword, 10);
+  const [row] = await sql`
+    UPDATE app_users
+    SET password_hash = ${hash}, must_change = ${mustChange}, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  return row ? { ok: true } : null;
+}
+
+async function adminDeleteUser(id) {
+  const sql = getSql();
+  if (!sql) return null;
+  const [row] = await sql`DELETE FROM app_users WHERE id = ${id} RETURNING id`;
+  return row ? { ok: true } : null;
+}
+
 async function adminPoSnapshot() {
   const sql = getSql();
   if (!sql) return null;
@@ -333,32 +433,70 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
 
-    // ─── Admin-only KPI API ────────────────────────────────────────────
-    // These must sit behind the same auth + require the admin role.
+    // ─── Admin-only API ───────────────────────────────────────────────
+    // These sit behind the session auth + require role=admin. Everything
+    // non-destructive is a GET; user CRUD uses POST with JSON bodies.
     if (path.startsWith("/api/admin/")) {
       if (session.role !== "admin") {
         res.writeHead(403, { "content-type": "application/json" });
         return res.end(JSON.stringify({ error: "admin only" }));
       }
       try {
-        let data = null;
-        if (path === "/api/admin/sales-snapshot") data = await adminSalesSnapshot();
-        else if (path === "/api/admin/invoice-library-snapshot") data = await adminInvoiceLibrarySnapshot();
-        else if (path === "/api/admin/po-snapshot") data = await adminPoSnapshot();
-        else {
-          res.writeHead(404, { "content-type": "application/json" });
-          return res.end(JSON.stringify({ error: "unknown admin endpoint" }));
+        // ─── KPI snapshots (GET) ─────────────────────────────────────
+        if (req.method === "GET") {
+          let data = null;
+          if (path === "/api/admin/sales-snapshot") data = await adminSalesSnapshot();
+          else if (path === "/api/admin/invoice-library-snapshot") data = await adminInvoiceLibrarySnapshot();
+          else if (path === "/api/admin/po-snapshot") data = await adminPoSnapshot();
+          else if (path === "/api/admin/users") data = await adminListUsers();
+          else if (path === "/api/admin/meta") data = { sections: SECTION_KEYS, apps: APP_KEYS };
+          else {
+            res.writeHead(404, { "content-type": "application/json" });
+            return res.end(JSON.stringify({ error: "unknown admin endpoint" }));
+          }
+          if (data === null) {
+            res.writeHead(503, { "content-type": "application/json" });
+            return res.end(JSON.stringify({ error: "DATABASE_URL not configured" }));
+          }
+          res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+          return res.end(JSON.stringify(data));
         }
-        if (data === null) {
-          res.writeHead(503, { "content-type": "application/json" });
-          return res.end(JSON.stringify({ error: "DATABASE_URL not configured" }));
+
+        // ─── User CRUD (POST) ───────────────────────────────────────
+        if (req.method === "POST") {
+          const body = await readJsonBody(req);
+          if (!body) {
+            res.writeHead(400, { "content-type": "application/json" });
+            return res.end(JSON.stringify({ error: "Invalid JSON" }));
+          }
+          let data = null;
+          if (path === "/api/admin/users/create") data = await adminCreateUser(body);
+          else if (path === "/api/admin/users/update") {
+            const { id, ...patch } = body;
+            if (!id) throw new Error("id required");
+            data = await adminUpdateUser(id, patch);
+          } else if (path === "/api/admin/users/reset-password") {
+            if (!body.id || !body.newPassword) throw new Error("id + newPassword required");
+            data = await adminResetUserPassword(body.id, body.newPassword, body.mustChange ?? true);
+          } else if (path === "/api/admin/users/delete") {
+            if (!body.id) throw new Error("id required");
+            // Don't let an admin delete themselves by accident.
+            if (String(body.id) === String(session.userId)) throw new Error("No puedes eliminar tu propia cuenta.");
+            data = await adminDeleteUser(body.id);
+          } else {
+            res.writeHead(404, { "content-type": "application/json" });
+            return res.end(JSON.stringify({ error: "unknown admin endpoint" }));
+          }
+          res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+          return res.end(JSON.stringify(data ?? { ok: true }));
         }
-        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-        return res.end(JSON.stringify(data));
+
+        res.writeHead(405, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: "method not allowed" }));
       } catch (err) {
         console.error("[hub] admin API error:", err);
         res.writeHead(500, { "content-type": "application/json" });
-        return res.end(JSON.stringify({ error: "query failed" }));
+        return res.end(JSON.stringify({ error: err?.message || "query failed" }));
       }
     }
 
