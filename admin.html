@@ -468,6 +468,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="overview">Overview</button>
         <button class="tab" data-tab="users">Usuarios &amp; Permisos</button>
+        <button class="tab" data-tab="junta">Sala de Junta</button>
         <button class="tab" data-tab="playground">Mis Notas</button>
         <button class="tab" data-tab="quick-links">Accesos Rápidos</button>
       </div>
@@ -518,6 +519,18 @@
             <button class="btn btn-secondary" id="btn-refresh-users">Refrescar</button>
           </div>
           <div id="users-table" class="loading">Cargando usuarios…</div>
+        </div>
+      </div>
+
+      <!-- ─── Board Room tab ─────────────────────────────────────── -->
+      <div class="tab-panel" data-panel="junta">
+        <div class="section">
+          <h2>🏛️ Sala de Junta</h2>
+          <p class="section-sub">
+            Lo que escribas aquí lo ven los miembros de la junta al entrar al link compartible.
+            Los KPIs se calculan en tiempo real al abrir la página.
+          </p>
+          <div id="junta-editor" class="loading">Cargando…</div>
         </div>
       </div>
 
@@ -879,8 +892,128 @@
           );
           if (tab === "users") loadUsers();
           if (tab === "playground") loadNotes();
+          if (tab === "junta") loadJunta();
         });
       });
+
+      // ─── Sala de Junta ───────────────────────────────────────────
+      let juntaState = null;
+      async function loadJunta() {
+        const el = document.getElementById("junta-editor");
+        el.classList.add("loading");
+        el.textContent = "Cargando…";
+        try {
+          const data = await fetchJson("/api/admin/board-room");
+          if (!data) {
+            el.innerHTML = '<div class="coming-soon">Error cargando la Sala de Junta.</div>';
+            return;
+          }
+          juntaState = data;
+          renderJunta();
+        } catch (err) {
+          el.innerHTML = '<div class="coming-soon">Error: ' + escapeHtml(err.message) + "</div>";
+        }
+      }
+
+      function renderJunta() {
+        const el = document.getElementById("junta-editor");
+        el.classList.remove("loading");
+        const content = juntaState.content || {};
+        const shareUrl = `${window.location.origin}/junta/${juntaState.accessToken}`;
+        el.innerHTML = `
+          <div class="form-row">
+            <label>Título de la reunión / período</label>
+            <input type="text" id="j-title"
+              placeholder="ej. Board Q2 2026 — Casa Bruja"
+              value="${escapeHtml(content.title || "")}" />
+          </div>
+
+          <div class="form-row">
+            <label>Mensaje / resumen ejecutivo</label>
+            <textarea id="j-summary" class="notes-area" style="min-height: 140px;"
+              placeholder="Cómo nos fue el trimestre, qué lanzamos, qué viene...">${escapeHtml(content.summary || "")}</textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Agenda / puntos a tratar</label>
+            <textarea id="j-agenda" class="notes-area" style="min-height: 120px;"
+              placeholder="1. Revisión ventas Q2&#10;2. Pipeline de producción&#10;3. CAPEX 2026">${escapeHtml(content.agenda || "")}</textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Comentarios sobre los KPIs</label>
+            <textarea id="j-kpi-commentary" class="notes-area" style="min-height: 120px;"
+              placeholder="Los números de venta que verán a continuación reflejan...">${escapeHtml(content.kpiCommentary || "")}</textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Notas adicionales</label>
+            <textarea id="j-notes" class="notes-area" style="min-height: 100px;"
+              placeholder="Cualquier cosa extra para la junta...">${escapeHtml(content.notes || "")}</textarea>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button class="btn" id="btn-save-junta">Guardar cambios</button>
+            <button class="btn btn-secondary" id="btn-reload-junta">Descartar</button>
+          </div>
+
+          <div style="margin-top: 24px; padding: 16px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 10px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+              🔗 Link para la junta
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <input type="text" id="j-share-url" readonly value="${escapeHtml(shareUrl)}"
+                style="flex: 1; min-width: 300px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;" />
+              <button class="btn btn-secondary btn-sm" id="btn-copy-link">Copiar</button>
+              <button class="btn btn-danger btn-sm" id="btn-rotate-token" title="Genera un nuevo token; el link anterior deja de funcionar">Rotar</button>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">
+              Cualquier persona con este link verá los contenidos + KPIs en vivo. Rotar el token invalida shares anteriores.
+              Última actualización: ${juntaState.updatedAt ? new Date(juntaState.updatedAt).toLocaleString("es-PA") : "—"}
+            </div>
+          </div>
+        `;
+
+        document.getElementById("btn-save-junta").addEventListener("click", async () => {
+          const payload = {
+            title: document.getElementById("j-title").value,
+            summary: document.getElementById("j-summary").value,
+            agenda: document.getElementById("j-agenda").value,
+            kpiCommentary: document.getElementById("j-kpi-commentary").value,
+            notes: document.getElementById("j-notes").value,
+          };
+          try {
+            await fetchJson("/api/admin/board-room/save", { method: "POST", body: { content: payload } });
+            await loadJunta();
+            alert("Guardado.");
+          } catch (err) {
+            alert("Error: " + err.message);
+          }
+        });
+        document.getElementById("btn-reload-junta").addEventListener("click", loadJunta);
+        document.getElementById("btn-copy-link").addEventListener("click", async () => {
+          const url = document.getElementById("j-share-url").value;
+          try {
+            await navigator.clipboard.writeText(url);
+            const btn = document.getElementById("btn-copy-link");
+            const orig = btn.textContent;
+            btn.textContent = "✓ Copiado";
+            setTimeout(() => (btn.textContent = orig), 1400);
+          } catch {
+            document.getElementById("j-share-url").select();
+            document.execCommand("copy");
+          }
+        });
+        document.getElementById("btn-rotate-token").addEventListener("click", async () => {
+          if (!confirm("¿Generar un nuevo token? El link anterior dejará de funcionar.")) return;
+          try {
+            await fetchJson("/api/admin/board-room/rotate-token", { method: "POST", body: {} });
+            await loadJunta();
+          } catch (err) {
+            alert("Error: " + err.message);
+          }
+        });
+      }
 
       // ─── Users tab ───────────────────────────────────────────────
       let cachedMeta = null;

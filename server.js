@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import postgres from "postgres";
 import bcrypt from "bcryptjs";
 
@@ -342,6 +342,84 @@ async function adminDeleteUser(id) {
   return row ? { ok: true } : null;
 }
 
+// ─── Board Room (Sala de Junta) ────────────────────────────────────────────
+// Singleton table holding Jonathan's content for the board-facing page.
+// Access model: anyone who knows the `access_token` can view /junta/<token>.
+// Admin can rotate the token to invalidate old shares.
+
+let _schemaBootstrapped = false;
+async function ensureSchema() {
+  if (_schemaBootstrapped) return;
+  const sql = getSql();
+  if (!sql) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS board_room (
+      id INTEGER PRIMARY KEY,
+      content JSONB NOT NULL DEFAULT '{}'::jsonb,
+      access_token VARCHAR(64) NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      CONSTRAINT board_room_singleton CHECK (id = 1)
+    )
+  `;
+  // Seed singleton row with a fresh token if not present.
+  await sql`
+    INSERT INTO board_room (id, content, access_token)
+    VALUES (1, '{}'::jsonb, ${randomBytes(24).toString("hex")})
+    ON CONFLICT (id) DO NOTHING
+  `;
+  _schemaBootstrapped = true;
+}
+
+async function adminBoardRoomGet() {
+  const sql = getSql();
+  if (!sql) return null;
+  await ensureSchema();
+  const [row] = await sql`SELECT content, access_token, updated_at FROM board_room WHERE id = 1`;
+  return row ? {
+    content: row.content || {},
+    accessToken: row.access_token,
+    updatedAt: row.updated_at,
+  } : null;
+}
+
+async function adminBoardRoomSave(content) {
+  const sql = getSql();
+  if (!sql) return null;
+  await ensureSchema();
+  const [row] = await sql`
+    UPDATE board_room
+    SET content = ${sql.json(content || {})}, updated_at = NOW()
+    WHERE id = 1
+    RETURNING content, access_token, updated_at
+  `;
+  return row;
+}
+
+async function adminBoardRoomRotateToken() {
+  const sql = getSql();
+  if (!sql) return null;
+  await ensureSchema();
+  const newToken = randomBytes(24).toString("hex");
+  const [row] = await sql`
+    UPDATE board_room
+    SET access_token = ${newToken}, updated_at = NOW()
+    WHERE id = 1
+    RETURNING access_token
+  `;
+  return row;
+}
+
+async function publicBoardRoomByToken(token) {
+  const sql = getSql();
+  if (!sql) return null;
+  await ensureSchema();
+  const [row] = await sql`
+    SELECT content, updated_at FROM board_room
+    WHERE id = 1 AND access_token = ${token}
+  `;
+  return row ? { content: row.content || {}, updatedAt: row.updated_at } : null;
+}
+
 async function adminPoSnapshot() {
   const sql = getSql();
   if (!sql) return null;
@@ -453,6 +531,47 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // ─── Public Board Room (Sala de Junta) ────────────────────────────
+    // The board doesn't log in. They click a shareable link that embeds
+    // the access_token. The token gates access — rotate it to revoke.
+
+    // JSON API for the board page to fetch content + KPIs.
+    const juntaApiMatch = path.match(/^\/api\/junta\/([a-f0-9]{16,})$/i);
+    if (juntaApiMatch) {
+      try {
+        const token = juntaApiMatch[1];
+        const room = await publicBoardRoomByToken(token);
+        if (!room) {
+          res.writeHead(404, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ error: "invalid token" }));
+        }
+        // Bundle the live KPIs alongside Jonathan's content so the board
+        // page can render both in one round trip.
+        const [sales, poSnap] = await Promise.all([
+          adminSalesSnapshot().catch(() => null),
+          adminPoSnapshot().catch(() => null),
+        ]);
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        return res.end(JSON.stringify({ ...room, sales, po: poSnap }));
+      } catch (err) {
+        console.error("[hub] junta api error:", err);
+        res.writeHead(500, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: "query failed" }));
+      }
+    }
+
+    // HTML page for the board — token validation happens client-side
+    // against the api/junta/<token> endpoint.
+    const juntaPageMatch = path.match(/^\/junta\/([a-f0-9]{16,})\/?$/i);
+    if (juntaPageMatch) {
+      const served = await serveFile(res, join(ROOT, "junta.html"));
+      if (!served) {
+        res.writeHead(500);
+        res.end("junta page missing");
+      }
+      return;
+    }
+
     // Auth gate for the hub itself
     const cookies = parseCookies(req.headers.cookie);
     const session = verifyJWT(cookies[COOKIE_NAME]);
@@ -477,6 +596,7 @@ const server = createServer(async (req, res) => {
           else if (path === "/api/admin/invoice-library-snapshot") data = await adminInvoiceLibrarySnapshot();
           else if (path === "/api/admin/po-snapshot") data = await adminPoSnapshot();
           else if (path === "/api/admin/users") data = await adminListUsers();
+          else if (path === "/api/admin/board-room") data = await adminBoardRoomGet();
           else if (path === "/api/admin/meta")
             data = {
               apps: APP_KEYS,
@@ -518,6 +638,10 @@ const server = createServer(async (req, res) => {
             // Don't let an admin delete themselves by accident.
             if (String(body.id) === String(session.userId)) throw new Error("No puedes eliminar tu propia cuenta.");
             data = await adminDeleteUser(body.id);
+          } else if (path === "/api/admin/board-room/save") {
+            data = await adminBoardRoomSave(body.content);
+          } else if (path === "/api/admin/board-room/rotate-token") {
+            data = await adminBoardRoomRotateToken();
           } else {
             res.writeHead(404, { "content-type": "application/json" });
             return res.end(JSON.stringify({ error: "unknown admin endpoint" }));
