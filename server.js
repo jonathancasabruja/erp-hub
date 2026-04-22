@@ -437,6 +437,200 @@ async function adminPoSnapshot() {
   return { last30Days: rows };
 }
 
+// ─── Extended data for the board presentation ─────────────────────────────
+// The junta page needs richer dashboards — monthly trend, product leaderboard,
+// brand performance, growth vs last month, category spend. These call
+// directly against the shared DB so the slides can render charts.
+
+async function juntaMonthlyTrend(months = 12) {
+  const sql = getSql();
+  if (!sql) return [];
+  const rows = await sql`
+    WITH month_series AS (
+      SELECT DATE_TRUNC('month', generate_series(
+        (CURRENT_DATE - (${months} || ' months')::interval)::date,
+        CURRENT_DATE,
+        INTERVAL '1 month'
+      ))::date AS month
+    ),
+    csv_monthly AS (
+      SELECT
+        DATE_TRUNC('month', "fileDate"::date)::date AS month,
+        CASE WHEN type = 'Taproom' THEN 'taproom' ELSE 'distribucion' END AS channel,
+        COALESCE(SUM(subtotal), 0)::float AS revenue
+      FROM csv_records
+      WHERE "fileDate" IS NOT NULL
+        AND "fileDate"::date >= (CURRENT_DATE - (${months} || ' months')::interval)::date
+      GROUP BY 1, 2
+    )
+    SELECT
+      TO_CHAR(ms.month, 'YYYY-MM') AS month,
+      COALESCE(SUM(c.revenue), 0)::float AS total,
+      COALESCE(SUM(c.revenue) FILTER (WHERE c.channel = 'distribucion'), 0)::float AS distribucion,
+      COALESCE(SUM(c.revenue) FILTER (WHERE c.channel = 'taproom'), 0)::float AS taproom
+    FROM month_series ms
+    LEFT JOIN csv_monthly c ON c.month = ms.month
+    GROUP BY ms.month
+    ORDER BY ms.month ASC
+  `;
+  return rows;
+}
+
+async function juntaTopProducts(limit = 10) {
+  const sql = getSql();
+  if (!sql) return [];
+  const monthStart = panamaMonthStart();
+  const today = panamaToday();
+  const rows = await sql`
+    SELECT
+      product_code,
+      MAX(product_name) AS product_name,
+      SUM(line_total)::float AS revenue,
+      SUM(quantity)::float AS quantity
+    FROM sales_line_items
+    WHERE sale_date >= ${monthStart}
+      AND sale_date <= ${today}
+      AND product_code IS NOT NULL
+      AND source_order_id IS NULL
+    GROUP BY product_code
+    ORDER BY revenue DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
+
+async function juntaBrandPerformance(limit = 12) {
+  const sql = getSql();
+  if (!sql) return [];
+  const yearStart = panamaYearStart();
+  const today = panamaToday();
+  const rows = await sql`
+    WITH decomposed AS (
+      SELECT
+        line_total,
+        quantity,
+        invoice_number,
+        customer_code,
+        SPLIT_PART(product_code, '-', 1) AS format_code,
+        SPLIT_PART(product_code, '-', 2) AS brand_code
+      FROM sales_line_items
+      WHERE sale_date >= ${yearStart}
+        AND sale_date <= ${today}
+        AND source_order_id IS NULL
+        AND product_code IS NOT NULL
+    )
+    SELECT
+      brand_code,
+      COALESCE(SUM(line_total), 0)::float AS revenue,
+      COALESCE(SUM(quantity), 0)::float AS quantity,
+      COUNT(DISTINCT customer_code)::int AS customers,
+      COALESCE(SUM(quantity) FILTER (WHERE format_code = 'CBO'), 0)::float AS caja,
+      COALESCE(SUM(quantity) FILTER (WHERE format_code = 'CLA'), 0)::float AS lata,
+      COALESCE(SUM(quantity) FILTER (WHERE format_code = 'KEG'), 0)::float AS keg
+    FROM decomposed
+    WHERE brand_code <> ''
+    GROUP BY brand_code
+    ORDER BY revenue DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
+
+/** Growth this month vs previous month — identifies growers, decliners, new, lost. */
+async function juntaGrowthReport() {
+  const sql = getSql();
+  if (!sql) return null;
+  const today = panamaToday();
+  const monthStart = panamaMonthStart();
+  // Previous month's first day
+  const [y, m] = monthStart.split("-").map(Number);
+  const prevMonthStart = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}-01`;
+  const prevMonthEnd = new Date(y, m - 1, 0).toISOString().slice(0, 10);
+
+  const [thisMonth, lastMonth] = await Promise.all([
+    sql`
+      SELECT customer_code, COALESCE(SUM(line_total), 0)::float AS rev
+      FROM sales_line_items
+      WHERE sale_date >= ${monthStart} AND sale_date <= ${today}
+        AND customer_code IS NOT NULL AND source_order_id IS NULL
+      GROUP BY customer_code
+    `,
+    sql`
+      SELECT customer_code, COALESCE(SUM(line_total), 0)::float AS rev
+      FROM sales_line_items
+      WHERE sale_date >= ${prevMonthStart} AND sale_date <= ${prevMonthEnd}
+        AND customer_code IS NOT NULL AND source_order_id IS NULL
+      GROUP BY customer_code
+    `,
+  ]);
+
+  const lastByCode = new Map(lastMonth.map((r) => [r.customer_code, r.rev]));
+  const thisByCode = new Map(thisMonth.map((r) => [r.customer_code, r.rev]));
+
+  const codes = new Set([...lastByCode.keys(), ...thisByCode.keys()]);
+  const rows = [];
+  for (const code of codes) {
+    const prev = lastByCode.get(code) ?? 0;
+    const curr = thisByCode.get(code) ?? 0;
+    rows.push({ customer_code: code, prev, curr, delta: curr - prev });
+  }
+  const names = await sql`
+    SELECT customer_code, COALESCE(friendly_name, razon_social, customer_code) AS name
+    FROM customer_names WHERE customer_code = ANY(${codes.size > 0 ? [...codes] : [""]})
+  `;
+  const nameByCode = new Map(names.map((n) => [n.customer_code, n.name]));
+  for (const r of rows) {
+    r.name = nameByCode.get(r.customer_code) ?? r.customer_code;
+  }
+
+  const growers = rows.filter((r) => r.delta > 0 && r.prev > 0).sort((a, b) => b.delta - a.delta).slice(0, 8);
+  const decliners = rows.filter((r) => r.delta < 0 && r.curr > 0).sort((a, b) => a.delta - b.delta).slice(0, 8);
+  const newCustomers = rows.filter((r) => r.prev === 0 && r.curr > 0).sort((a, b) => b.curr - a.curr).slice(0, 8);
+  const lostCustomers = rows.filter((r) => r.curr === 0 && r.prev > 0).sort((a, b) => a.prev - b.prev).slice(0, 8);
+
+  return {
+    thisMonthLabel: monthStart.slice(0, 7),
+    prevMonthLabel: prevMonthStart.slice(0, 7),
+    growers,
+    decliners,
+    newCustomers,
+    lostCustomers,
+  };
+}
+
+async function juntaCategorySpend(days = 90) {
+  const sql = getSql();
+  if (!sql) return [];
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = await sql`
+    SELECT
+      category::text AS category,
+      COUNT(*)::int AS invoices,
+      COALESCE(SUM(total_amount), 0)::float AS total
+    FROM supplier_invoices
+    WHERE invoice_date >= ${since}
+    GROUP BY category
+    ORDER BY total DESC
+  `;
+  return rows;
+}
+
+/** Master data function for the Sala de Junta presentation. Pulls every
+ *  dataset the slides need in a single round-trip so the page loads fast. */
+async function juntaFullPayload() {
+  const [sales, monthlyTrend, topProducts, brands, growth, categorySpend, po] =
+    await Promise.all([
+      adminSalesSnapshot().catch(() => null),
+      juntaMonthlyTrend(12).catch(() => []),
+      juntaTopProducts(10).catch(() => []),
+      juntaBrandPerformance(12).catch(() => []),
+      juntaGrowthReport().catch(() => null),
+      juntaCategorySpend(90).catch(() => []),
+      adminPoSnapshot().catch(() => null),
+    ]);
+  return { sales, monthlyTrend, topProducts, brands, growth, categorySpend, po };
+}
+
 // ─── Static + routing ──────────────────────────────────────────────────────
 
 const MIME = {
@@ -545,14 +739,11 @@ const server = createServer(async (req, res) => {
           res.writeHead(404, { "content-type": "application/json" });
           return res.end(JSON.stringify({ error: "invalid token" }));
         }
-        // Bundle the live KPIs alongside Jonathan's content so the board
-        // page can render both in one round trip.
-        const [sales, poSnap] = await Promise.all([
-          adminSalesSnapshot().catch(() => null),
-          adminPoSnapshot().catch(() => null),
-        ]);
+        // Bundle every KPI dataset the slides need in one round-trip so
+        // the presentation loads fast.
+        const data = await juntaFullPayload();
         res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-        return res.end(JSON.stringify({ ...room, sales, po: poSnap }));
+        return res.end(JSON.stringify({ ...room, ...data }));
       } catch (err) {
         console.error("[hub] junta api error:", err);
         res.writeHead(500, { "content-type": "application/json" });

@@ -935,21 +935,27 @@
           </div>
 
           <div class="form-row">
-            <label>Agenda / puntos a tratar</label>
+            <label>📋 Slide: Agenda</label>
             <textarea id="j-agenda" class="notes-area" style="min-height: 120px;"
               placeholder="1. Revisión ventas Q2&#10;2. Pipeline de producción&#10;3. CAPEX 2026">${escapeHtml(content.agenda || "")}</textarea>
           </div>
 
           <div class="form-row">
-            <label>Comentarios sobre los KPIs</label>
+            <label>📒 Slide: Libro Mayor / Estado de Resultados</label>
+            <textarea id="j-gl" class="notes-area" style="min-height: 160px;"
+              placeholder="Ingresos, Costo de Ventas, Gastos Operativos, EBITDA…&#10;&#10;Pega aquí el análisis mensual/trimestral. Más adelante cuando subas el GL en Excel, este slide se va a auto-poblar.">${escapeHtml(content.gl || "")}</textarea>
+          </div>
+
+          <div class="form-row">
+            <label>💬 Slide: Comentarios sobre los KPIs</label>
             <textarea id="j-kpi-commentary" class="notes-area" style="min-height: 120px;"
               placeholder="Los números de venta que verán a continuación reflejan...">${escapeHtml(content.kpiCommentary || "")}</textarea>
           </div>
 
           <div class="form-row">
-            <label>Notas adicionales</label>
+            <label>🎯 Slide: Notas / Cierre</label>
             <textarea id="j-notes" class="notes-area" style="min-height: 100px;"
-              placeholder="Cualquier cosa extra para la junta...">${escapeHtml(content.notes || "")}</textarea>
+              placeholder="Decisiones solicitadas a la junta, próximos pasos, etc.">${escapeHtml(content.notes || "")}</textarea>
           </div>
 
           <div style="display: flex; gap: 8px; margin-top: 16px;">
@@ -979,6 +985,7 @@
             title: document.getElementById("j-title").value,
             summary: document.getElementById("j-summary").value,
             agenda: document.getElementById("j-agenda").value,
+            gl: document.getElementById("j-gl").value,
             kpiCommentary: document.getElementById("j-kpi-commentary").value,
             notes: document.getElementById("j-notes").value,
           };

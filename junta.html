@@ -7,21 +7,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@700;800;900&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
       :root {
         --bg: #0a0e14;
         --bg-soft: #141922;
         --card: #1b2130;
+        --card-hover: #212837;
         --border: #2a3346;
+        --border-strong: #3a4663;
         --text: #f0f4fa;
         --text-dim: #8b95a8;
         --accent: #f59e0b;
         --gold: #fbbf24;
         --green: #34d399;
         --cyan: #38bdf8;
+        --rose: #fb7185;
+        --purple: #a78bfa;
       }
       * { box-sizing: border-box; }
       html, body {
@@ -31,82 +36,197 @@
         font-family: "Inter", system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         min-height: 100vh;
+        overflow: hidden;
       }
-      .wrap {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 56px 32px 96px;
+
+      /* Overall app shell: sidebar + main slide area */
+      .app {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        height: 100vh;
+      }
+
+      /* Sidebar with slide list */
+      aside {
+        background: linear-gradient(180deg, #0c1017 0%, #161b25 100%);
+        border-right: 1px solid var(--border);
+        padding: 28px 0 20px;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
       }
       .brand {
+        padding: 0 24px 24px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 16px;
+      }
+      .brand .wordmark {
         font-family: "Playfair Display", Georgia, serif;
-        font-size: 28px;
-        font-weight: 700;
-        letter-spacing: -0.01em;
+        font-size: 22px;
+        font-weight: 900;
         color: var(--gold);
-        margin-bottom: 8px;
+        line-height: 1;
+        letter-spacing: -0.01em;
       }
-      .title {
-        font-size: 44px;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-        margin: 0 0 12px;
-        line-height: 1.1;
-      }
-      .updated {
+      .brand .sub {
+        font-size: 10px;
+        letter-spacing: 0.18em;
         color: var(--text-dim);
-        font-size: 12px;
-        margin-bottom: 48px;
-      }
-      section {
-        margin-bottom: 48px;
-      }
-      section h2 {
-        font-size: 12px;
-        letter-spacing: 0.16em;
         text-transform: uppercase;
+        margin-top: 4px;
+      }
+      nav { padding: 0 12px; flex: 1; }
+      .slide-link {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        color: var(--text-dim);
+        cursor: pointer;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 2px;
+        transition: all 0.12s ease;
+        border: 1px solid transparent;
+      }
+      .slide-link:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); }
+      .slide-link.active {
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.3);
         color: var(--accent);
+        font-weight: 600;
+      }
+      .slide-link .num {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        width: 24px;
+        text-align: center;
+        color: var(--text-dim);
+      }
+      .slide-link.active .num { color: var(--accent); }
+      .sidebar-footer {
+        padding: 16px 24px 0;
+        font-size: 10px;
+        color: var(--text-dim);
+        border-top: 1px solid var(--border);
+        margin-top: 16px;
+      }
+
+      /* Main slide area */
+      main {
+        overflow-y: auto;
+        padding: 56px 72px 40px;
+        position: relative;
+      }
+      .slide {
+        display: none;
+        max-width: 1080px;
+        margin: 0 auto;
+        animation: fadeIn 0.3s ease;
+      }
+      .slide.active { display: block; }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Slide title */
+      .slide-eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: var(--accent);
+        text-transform: uppercase;
         font-weight: 700;
-        margin: 0 0 16px;
+        margin-bottom: 10px;
+      }
+      .slide-title {
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 48px;
+        font-weight: 800;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+        line-height: 1.05;
+      }
+      .slide-sub {
+        font-size: 15px;
+        color: var(--text-dim);
+        margin: 0 0 36px;
       }
       .prose {
-        font-size: 16px;
-        line-height: 1.7;
+        font-size: 17px;
+        line-height: 1.75;
         color: var(--text);
         white-space: pre-wrap;
+        word-wrap: break-word;
       }
-      .kpi-grid {
+      .prose.big { font-size: 20px; line-height: 1.7; }
+
+      /* KPI cards */
+      .kpi-row {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 16px;
+        margin-bottom: 28px;
       }
-      .kpi-card {
+      .kpi {
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 14px;
-        padding: 20px 22px;
+        padding: 22px 24px;
       }
-      .kpi-card .label {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
+      .kpi .label {
+        font-size: 10px;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         color: var(--text-dim);
-      }
-      .kpi-card .value {
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 32px;
         font-weight: 700;
-        margin-top: 6px;
+      }
+      .kpi .value {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 34px;
+        font-weight: 700;
+        margin-top: 8px;
         letter-spacing: -0.02em;
+        line-height: 1;
       }
-      .kpi-card .sub {
-        font-size: 12px;
+      .kpi .sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+      .kpi .value.gold { color: var(--gold); }
+      .kpi .value.cyan { color: var(--cyan); }
+      .kpi .value.green { color: var(--green); }
+      .kpi .value.rose { color: var(--rose); }
+      .kpi .value.purple { color: var(--purple); }
+
+      /* Section headers inside a slide */
+      .section-h {
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
         color: var(--text-dim);
-        margin-top: 2px;
+        font-weight: 700;
+        margin: 32px 0 12px;
       }
-      .value.gold { color: var(--gold); }
-      .value.cyan { color: var(--cyan); }
-      .value.green { color: var(--green); }
+
+      /* Chart wrapper */
+      .chart-wrap {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin-bottom: 20px;
+      }
+      .chart-wrap.tall { height: 380px; position: relative; }
+      .chart-wrap.medium { height: 300px; position: relative; }
+      .chart-wrap canvas { max-height: 100% !important; }
+
+      /* Two-column grid */
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      /* Tables */
       table {
         width: 100%;
         border-collapse: collapse;
@@ -127,154 +247,770 @@
         background: var(--bg-soft);
       }
       td {
-        padding: 10px 16px;
+        padding: 11px 16px;
         border-bottom: 1px solid var(--border);
         font-size: 14px;
       }
       tr:last-child td { border-bottom: none; }
+      tr:hover td { background: rgba(255, 255, 255, 0.02); }
       .num {
         font-family: "IBM Plex Mono", monospace;
         text-align: right;
         font-variant-numeric: tabular-nums;
       }
-      footer {
-        margin-top: 72px;
-        padding-top: 24px;
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .pill-green { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+      .pill-rose { background: rgba(251, 113, 133, 0.15); color: var(--rose); }
+      .pill-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
+      .pill-cyan { background: rgba(56, 189, 248, 0.15); color: var(--cyan); }
+
+      /* Cover slide */
+      .cover {
+        min-height: calc(100vh - 96px);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+      }
+      .cover .wordmark-big {
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 20px;
+        font-weight: 900;
+        color: var(--gold);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 24px;
+      }
+      .cover h1 {
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 72px;
+        font-weight: 900;
+        margin: 0 auto 20px;
+        letter-spacing: -0.03em;
+        line-height: 1.02;
+        max-width: 900px;
+      }
+      .cover .meta {
+        color: var(--text-dim);
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .cover .summary {
+        max-width: 760px;
+        margin: 48px auto 0;
+        font-size: 17px;
+        line-height: 1.75;
+        color: var(--text);
+        white-space: pre-wrap;
+        text-align: left;
+      }
+
+      /* GL placeholder */
+      .coming-soon {
+        padding: 40px;
+        border: 1px dashed var(--border-strong);
+        border-radius: 14px;
+        text-align: center;
+        color: var(--text-dim);
+      }
+      .coming-soon strong { color: var(--accent); }
+
+      /* Closing slide */
+      .closing h1 {
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 60px;
+      }
+
+      /* Loading / error */
+      .screen {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        height: 100vh;
+        gap: 12px;
+        color: var(--text-dim);
+      }
+      .screen .big { font-size: 28px; font-family: "Playfair Display", serif; color: var(--gold); }
+
+      /* Keyboard nav hint */
+      .nav-hint {
+        position: fixed;
+        bottom: 18px;
+        right: 20px;
+        font-size: 11px;
+        color: var(--text-dim);
+        background: rgba(26, 32, 48, 0.8);
+        backdrop-filter: blur(6px);
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        font-family: "IBM Plex Mono", monospace;
+      }
+
+      /* Footer stamp */
+      .slide-footer {
+        text-align: center;
+        margin-top: 56px;
+        padding-top: 20px;
         border-top: 1px solid var(--border);
-        text-align: center;
         color: var(--text-dim);
-        font-size: 12px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }
-      .error, .loading {
-        padding: 48px;
-        text-align: center;
-        color: var(--text-dim);
-      }
-      .error strong { color: var(--gold); }
-      @media (max-width: 700px) {
-        .title { font-size: 30px; }
-        .wrap { padding: 32px 18px; }
+
+      @media (max-width: 900px) {
+        .app { grid-template-columns: 1fr; }
+        aside {
+          position: fixed;
+          top: 0; left: 0; right: 0;
+          height: auto;
+          padding: 12px;
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+          z-index: 10;
+        }
+        aside .brand, aside .sidebar-footer { display: none; }
+        nav {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          padding: 0;
+        }
+        .slide-link { flex-shrink: 0; }
+        main { padding: 100px 24px 40px; }
+        .slide-title { font-size: 30px; }
+        .cover h1 { font-size: 42px; }
+        .closing h1 { font-size: 36px; }
+        .two-col { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
-    <div id="root" class="wrap">
-      <div class="loading">Cargando…</div>
+    <div id="root" class="screen">
+      <div class="big">Cargando la presentación…</div>
+      <div>Un momento por favor.</div>
     </div>
     <script>
-      const token = window.location.pathname.split("/").pop().replace(/\/$/, "");
+      const token = window.location.pathname.split("/").filter(Boolean).pop();
+
       const money = (n) =>
-        "$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        "$" + Math.round(n || 0).toLocaleString("en-US");
+      const moneyFull = (n) =>
+        "$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const pct = (n) => {
+        if (n === null || n === undefined || !isFinite(n)) return "—";
+        return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+      };
+
       function escapeHtml(s) {
         return String(s ?? "")
           .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
       }
-      function asParagraphs(text) {
+      function asProse(text) {
         const trimmed = (text || "").trim();
         if (!trimmed) return "";
         return '<div class="prose">' + escapeHtml(trimmed) + "</div>";
       }
-      async function load() {
-        const root = document.getElementById("root");
-        try {
-          const r = await fetch(`/api/junta/${token}`);
-          if (!r.ok) {
-            root.innerHTML = '<div class="error"><strong>Link inválido o expirado.</strong><br />Pide a Jonathan un link nuevo.</div>';
-            return;
-          }
-          const data = await r.json();
-          const c = data.content || {};
-          const title = c.title || "Sala de Junta — Casa Bruja";
-          const updated = data.updatedAt ? new Date(data.updatedAt).toLocaleString("es-PA") : "—";
 
-          const sales = data.sales;
-          const po = data.po;
+      const BRAND_COLORS = ["#fbbf24", "#34d399", "#38bdf8", "#a78bfa", "#fb7185", "#f59e0b", "#60a5fa", "#f472b6", "#94a3b8", "#22d3ee", "#fb923c", "#4ade80"];
 
-          const kpiCards = sales
-            ? `
-              <div class="kpi-grid">
-                <div class="kpi-card">
-                  <div class="label">Ventas este mes</div>
-                  <div class="value gold">${money(sales.mtd?.total)}</div>
-                  <div class="sub">${sales.mtd?.invoices || 0} facturas</div>
+      // ── Slide definitions ──────────────────────────────────────────
+      // Each slide has: id (for hash routing), num, title, icon, render(data)
+      const SLIDES = [
+        {
+          id: "portada",
+          num: "01",
+          title: "Portada",
+          icon: "🎬",
+          render: (data) => {
+            const c = data.content || {};
+            const title = c.title || "Casa Bruja · Board Review";
+            const updated = data.updatedAt ? new Date(data.updatedAt).toLocaleDateString("es-PA", { day: "numeric", month: "long", year: "numeric" }) : "—";
+            return `
+              <div class="cover">
+                <div class="wordmark-big">Casa Bruja</div>
+                <h1>${escapeHtml(title)}</h1>
+                <div class="meta">${escapeHtml(updated)} · Panamá</div>
+                ${c.summary ? `<div class="summary">${escapeHtml(c.summary)}</div>` : ""}
+              </div>
+            `;
+          },
+        },
+        {
+          id: "agenda",
+          num: "02",
+          title: "Agenda",
+          icon: "📋",
+          render: (data) => {
+            const c = data.content || {};
+            const agenda = (c.agenda || "").trim();
+            return `
+              <div class="slide-eyebrow">Agenda</div>
+              <h2 class="slide-title">Puntos a tratar</h2>
+              <p class="slide-sub">Orden propuesto para esta sesión.</p>
+              ${
+                agenda
+                  ? `<div class="prose big">${escapeHtml(agenda)}</div>`
+                  : `<div class="coming-soon"><strong>No hay agenda cargada.</strong><br />Jonathan puede agregarla desde hub.casabruja.com/admin → Sala de Junta.</div>`
+              }
+            `;
+          },
+        },
+        {
+          id: "ventas",
+          num: "03",
+          title: "Ventas",
+          icon: "📊",
+          render: (data) => {
+            const sales = data.sales;
+            const trend = data.monthlyTrend || [];
+            if (!sales) {
+              return `<div class="slide-title">Ventas</div><div class="coming-soon">Sin datos de ventas disponibles.</div>`;
+            }
+            const mtd = sales.mtd || {};
+            const ytd = sales.ytd || {};
+            // YoY delta if we have it — compare Jan-today of this year vs same window of last year
+            // (fallback: don't show)
+            return `
+              <div class="slide-eyebrow">Ventas</div>
+              <h2 class="slide-title">Desempeño de ventas</h2>
+              <p class="slide-sub">Al ${sales.asOf} · Datos directos de csv_records + sales_line_items</p>
+
+              <div class="section-h">Mes en curso (MTD)</div>
+              <div class="kpi-row">
+                <div class="kpi">
+                  <div class="label">Ventas MTD</div>
+                  <div class="value gold">${money(mtd.total)}</div>
+                  <div class="sub">${mtd.invoices || 0} facturas</div>
                 </div>
-                <div class="kpi-card">
-                  <div class="label">Distribución MTD</div>
-                  <div class="value cyan">${money(sales.mtd?.distribucion)}</div>
+                <div class="kpi">
+                  <div class="label">Distribución</div>
+                  <div class="value cyan">${money(mtd.distribucion)}</div>
                 </div>
-                <div class="kpi-card">
-                  <div class="label">Taproom MTD</div>
-                  <div class="value green">${money(sales.mtd?.taproom)}</div>
-                </div>
-                <div class="kpi-card">
-                  <div class="label">Ventas año en curso</div>
-                  <div class="value gold">${money(sales.ytd?.total)}</div>
-                  <div class="sub">${sales.ytd?.invoices || 0} facturas</div>
-                </div>
-                <div class="kpi-card">
-                  <div class="label">Clientes activos YTD</div>
-                  <div class="value">${sales.customersThisYear || 0}</div>
+                <div class="kpi">
+                  <div class="label">Taproom</div>
+                  <div class="value green">${money(mtd.taproom)}</div>
                 </div>
               </div>
-            `
-            : "";
 
-          const topCustomersTable =
-            sales?.topCustomersThisMonth?.length > 0
-              ? `
+              <div class="section-h">Año en curso (YTD)</div>
+              <div class="kpi-row">
+                <div class="kpi">
+                  <div class="label">Ventas YTD</div>
+                  <div class="value gold">${money(ytd.total)}</div>
+                  <div class="sub">${ytd.invoices || 0} facturas</div>
+                </div>
+                <div class="kpi">
+                  <div class="label">Distribución YTD</div>
+                  <div class="value cyan">${money(ytd.distribucion)}</div>
+                </div>
+                <div class="kpi">
+                  <div class="label">Taproom YTD</div>
+                  <div class="value green">${money(ytd.taproom)}</div>
+                </div>
+                <div class="kpi">
+                  <div class="label">Clientes activos</div>
+                  <div class="value purple">${sales.customersThisYear || 0}</div>
+                </div>
+              </div>
+
+              ${trend.length > 0 ? `
+                <div class="section-h">Evolución últimos 12 meses</div>
+                <div class="chart-wrap tall"><canvas id="chart-trend"></canvas></div>
+              ` : ""}
+
+              ${data.content?.kpiCommentary ? `
+                <div class="section-h">Comentarios</div>
+                <div class="prose">${escapeHtml(data.content.kpiCommentary)}</div>
+              ` : ""}
+            `;
+          },
+          afterRender: (data) => {
+            const trend = data.monthlyTrend || [];
+            if (trend.length === 0) return;
+            const ctx = document.getElementById("chart-trend");
+            if (!ctx) return;
+            new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: trend.map((t) => t.month),
+                datasets: [
+                  {
+                    label: "Distribución",
+                    data: trend.map((t) => t.distribucion),
+                    borderColor: "#38bdf8",
+                    backgroundColor: "rgba(56, 189, 248, 0.1)",
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: "#38bdf8",
+                  },
+                  {
+                    label: "Taproom",
+                    data: trend.map((t) => t.taproom),
+                    borderColor: "#34d399",
+                    backgroundColor: "rgba(52, 211, 153, 0.1)",
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: "#34d399",
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { labels: { color: "#f0f4fa", font: { size: 13 } } },
+                  tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${money(ctx.parsed.y)}` } },
+                },
+                scales: {
+                  x: { ticks: { color: "#8b95a8" }, grid: { color: "rgba(255,255,255,0.04)" } },
+                  y: { ticks: { color: "#8b95a8", callback: (v) => money(v) }, grid: { color: "rgba(255,255,255,0.04)" } },
+                },
+              },
+            });
+          },
+        },
+        {
+          id: "gl",
+          num: "04",
+          title: "Libro Mayor",
+          icon: "📒",
+          render: (data) => {
+            const text = (data.content?.gl || "").trim();
+            return `
+              <div class="slide-eyebrow">Libro Mayor</div>
+              <h2 class="slide-title">Estado de Resultados</h2>
+              <p class="slide-sub">Ingresos, costos, gastos operativos y resultado</p>
+              ${
+                text
+                  ? `<div class="prose big">${escapeHtml(text)}</div>`
+                  : `<div class="coming-soon">
+                       <strong>Pendiente.</strong><br />
+                       Cuando Jonathan suba el GL al sistema o pegue el análisis mensual,
+                       aparecerá aquí con EBITDA, márgenes y comparativos YoY.
+                     </div>`
+              }
+            `;
+          },
+        },
+        {
+          id: "top-clientes",
+          num: "05",
+          title: "Top Clientes",
+          icon: "👥",
+          render: (data) => {
+            const rows = (data.sales?.topCustomersThisMonth || []).slice(0, 10);
+            if (rows.length === 0) {
+              return `<div class="slide-title">Top Clientes</div><div class="coming-soon">Sin ventas en el mes en curso todavía.</div>`;
+            }
+            return `
+              <div class="slide-eyebrow">Top 10 · Clientes</div>
+              <h2 class="slide-title">Clientes del mes</h2>
+              <p class="slide-sub">Por facturación · ${data.sales?.asOf}</p>
               <table>
                 <thead>
                   <tr>
                     <th>Cliente</th>
                     <th class="num">Facturas</th>
-                    <th class="num">Revenue</th>
+                    <th class="num">Revenue MTD</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${sales.topCustomersThisMonth
-                    .slice(0, 10)
+                  ${rows
                     .map(
-                      (r) => `
+                      (r, i) => `
                     <tr>
-                      <td><strong>${escapeHtml(r.name || r.customer_code)}</strong></td>
+                      <td>
+                        <div style="font-weight:600">${i + 1}. ${escapeHtml(r.name || r.customer_code)}</div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim)">${escapeHtml(r.customer_code)}</div>
+                      </td>
                       <td class="num">${r.invoices}</td>
                       <td class="num"><strong>${money(r.revenue)}</strong></td>
-                    </tr>
-                  `
+                    </tr>`
                     )
                     .join("")}
                 </tbody>
               </table>
-            `
-              : "";
+            `;
+          },
+        },
+        {
+          id: "productos",
+          num: "06",
+          title: "Productos",
+          icon: "🍺",
+          render: (data) => {
+            const products = data.topProducts || [];
+            const brands = data.brands || [];
+            if (products.length === 0 && brands.length === 0) {
+              return `<div class="slide-title">Productos</div><div class="coming-soon">Sin datos de productos.</div>`;
+            }
+            return `
+              <div class="slide-eyebrow">Productos &amp; Marcas</div>
+              <h2 class="slide-title">Qué se vende</h2>
+              <p class="slide-sub">Top del mes + Rendimiento por marca YTD</p>
 
-          root.innerHTML = `
-            <div class="brand">Casa Bruja</div>
-            <h1 class="title">${escapeHtml(title)}</h1>
-            <div class="updated">Actualizado: ${escapeHtml(updated)}</div>
+              ${products.length > 0 ? `
+                <div class="section-h">Top 10 productos · Este mes</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Producto</th>
+                      <th class="num">Unidades</th>
+                      <th class="num">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${products.map((p, i) => `
+                      <tr>
+                        <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--accent)">${i + 1}. ${escapeHtml(p.product_code)}</td>
+                        <td>${escapeHtml(p.product_name || "—")}</td>
+                        <td class="num">${Math.round(p.quantity)}</td>
+                        <td class="num"><strong>${money(p.revenue)}</strong></td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              ` : ""}
 
-            ${c.summary ? `<section><h2>Resumen</h2>${asParagraphs(c.summary)}</section>` : ""}
+              ${brands.length > 0 ? `
+                <div class="section-h">Marcas · Año en curso</div>
+                <div class="chart-wrap medium"><canvas id="chart-brands"></canvas></div>
+              ` : ""}
+            `;
+          },
+          afterRender: (data) => {
+            const brands = data.brands || [];
+            if (brands.length === 0) return;
+            const ctx = document.getElementById("chart-brands");
+            if (!ctx) return;
+            new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: brands.map((b) => b.brand_code),
+                datasets: [{
+                  label: "Revenue YTD",
+                  data: brands.map((b) => b.revenue),
+                  backgroundColor: BRAND_COLORS,
+                  borderWidth: 0,
+                  borderRadius: 6,
+                }],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { callbacks: { label: (ctx) => money(ctx.parsed.y) } },
+                },
+                scales: {
+                  x: { ticks: { color: "#8b95a8", font: { size: 11 } }, grid: { display: false } },
+                  y: { ticks: { color: "#8b95a8", callback: (v) => money(v) }, grid: { color: "rgba(255,255,255,0.04)" } },
+                },
+              },
+            });
+          },
+        },
+        {
+          id: "crecimiento",
+          num: "07",
+          title: "Crecimiento",
+          icon: "📈",
+          render: (data) => {
+            const g = data.growth;
+            if (!g) {
+              return `<div class="slide-title">Crecimiento</div><div class="coming-soon">Sin datos de crecimiento MoM.</div>`;
+            }
+            const renderList = (title, rows, metric) => {
+              if (!rows || rows.length === 0) return `<div style="color:var(--text-dim);font-size:13px">—</div>`;
+              return `<table>
+                <thead><tr><th>${title}</th><th class="num">${metric}</th></tr></thead>
+                <tbody>
+                  ${rows.map((r) => `
+                    <tr>
+                      <td><div style="font-weight:500">${escapeHtml(r.name)}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim)">${escapeHtml(r.customer_code)}</div></td>
+                      <td class="num">
+                        ${metric === "Δ $"
+                          ? `<strong style="color:${r.delta >= 0 ? 'var(--green)' : 'var(--rose)'}">${r.delta >= 0 ? '+' : ''}${money(r.delta)}</strong>`
+                          : `<strong>${money(r.curr ?? r.prev ?? 0)}</strong>`}
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>`;
+            };
+            return `
+              <div class="slide-eyebrow">Crecimiento</div>
+              <h2 class="slide-title">Comparativo mes vs mes anterior</h2>
+              <p class="slide-sub">${g.thisMonthLabel} vs ${g.prevMonthLabel}</p>
 
-            ${c.agenda ? `<section><h2>Agenda</h2>${asParagraphs(c.agenda)}</section>` : ""}
+              <div class="two-col">
+                <div>
+                  <div class="section-h" style="color:var(--green)">📈 Growers (mayor crecimiento)</div>
+                  ${renderList("Cliente", g.growers, "Δ $")}
+                </div>
+                <div>
+                  <div class="section-h" style="color:var(--rose)">📉 Decliners (caída)</div>
+                  ${renderList("Cliente", g.decliners, "Δ $")}
+                </div>
+              </div>
 
-            ${kpiCards ? `<section><h2>KPIs en vivo</h2>${kpiCards}</section>` : ""}
+              <div class="two-col" style="margin-top: 24px;">
+                <div>
+                  <div class="section-h" style="color:var(--cyan)">✨ Clientes nuevos este mes</div>
+                  ${renderList("Cliente", g.newCustomers, "$ actual")}
+                </div>
+                <div>
+                  <div class="section-h" style="color:var(--text-dim)">💤 Dejaron de comprar este mes</div>
+                  ${renderList("Cliente", g.lostCustomers, "$ previo")}
+                </div>
+              </div>
+            `;
+          },
+        },
+        {
+          id: "compras",
+          num: "08",
+          title: "Compras",
+          icon: "🧾",
+          render: (data) => {
+            const cats = data.categorySpend || [];
+            const po = data.po?.last30Days || [];
+            if (cats.length === 0 && po.length === 0) {
+              return `<div class="slide-title">Compras</div><div class="coming-soon">Sin datos de compras.</div>`;
+            }
+            return `
+              <div class="slide-eyebrow">Compras &amp; Suministros</div>
+              <h2 class="slide-title">A dónde va el dinero</h2>
+              <p class="slide-sub">Facturas recibidas (últimos 90 días) + OCs activas</p>
 
-            ${c.kpiCommentary ? `<section><h2>Comentarios</h2>${asParagraphs(c.kpiCommentary)}</section>` : ""}
+              <div class="two-col">
+                ${cats.length > 0 ? `
+                  <div>
+                    <div class="section-h">Gasto por categoría · 90d</div>
+                    <div class="chart-wrap medium"><canvas id="chart-spend"></canvas></div>
+                  </div>
+                ` : ""}
+                ${po.length > 0 ? `
+                  <div>
+                    <div class="section-h">OCs últimos 30 días</div>
+                    <table>
+                      <thead><tr><th>Estado</th><th class="num">#</th><th class="num">Total</th></tr></thead>
+                      <tbody>
+                        ${po.map((r) => `
+                          <tr>
+                            <td><span class="pill pill-${{draft:"amber",ordered:"cyan",received:"green",approved:"green",cancelled:"rose"}[r.status]||"amber"}">${escapeHtml(r.status)}</span></td>
+                            <td class="num">${r.c}</td>
+                            <td class="num">${money(r.total)}</td>
+                          </tr>
+                        `).join("")}
+                      </tbody>
+                    </table>
+                  </div>
+                ` : ""}
+              </div>
+            `;
+          },
+          afterRender: (data) => {
+            const cats = data.categorySpend || [];
+            if (cats.length === 0) return;
+            const ctx = document.getElementById("chart-spend");
+            if (!ctx) return;
+            const CATEGORY_LABELS = {
+              brewing_raw_materials: "Materias primas",
+              brewing_packaging: "Empaque",
+              brewing_equipment: "Equipos/Repuestos",
+              logistics: "Logística",
+              taproom_food: "Food",
+              taproom_beverages: "Bebidas tap",
+              taproom_supplies: "Suministros tap",
+              utilities: "Servicios",
+              services: "Servicios prof.",
+              rent_facility: "Renta/Seguridad",
+              other: "Otros",
+            };
+            new Chart(ctx, {
+              type: "doughnut",
+              data: {
+                labels: cats.map((c) => CATEGORY_LABELS[c.category] || c.category),
+                datasets: [{
+                  data: cats.map((c) => c.total),
+                  backgroundColor: BRAND_COLORS,
+                  borderColor: "#0a0e14",
+                  borderWidth: 2,
+                }],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: "right", labels: { color: "#f0f4fa", font: { size: 11 }, padding: 10 } },
+                  tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${money(ctx.parsed)}` } },
+                },
+              },
+            });
+          },
+        },
+        {
+          id: "cierre",
+          num: "09",
+          title: "Cierre",
+          icon: "🎯",
+          render: (data) => {
+            const notes = (data.content?.notes || "").trim();
+            return `
+              <div class="closing" style="min-height: calc(100vh - 120px); display: flex; flex-direction: column; justify-content: center; text-align: center;">
+                <div class="slide-eyebrow">Cierre</div>
+                <h1>Próximos pasos</h1>
+                ${notes
+                  ? `<div class="prose big" style="max-width:760px;margin:32px auto;text-align:left;">${escapeHtml(notes)}</div>`
+                  : `<p class="slide-sub" style="text-align:center;margin-top:12px;">Gracias por su atención.</p>`}
+                <div class="slide-footer" style="max-width: 600px; margin: 48px auto 0;">
+                  Casa Bruja S.A. · Panamá · Datos actualizados: ${data.updatedAt ? new Date(data.updatedAt).toLocaleString("es-PA") : "—"}
+                </div>
+              </div>
+            `;
+          },
+        },
+      ];
 
-            ${topCustomersTable ? `<section><h2>Top clientes este mes</h2>${topCustomersTable}</section>` : ""}
+      // ── App init ──────────────────────────────────────────────────
+      let STATE = { data: null, currentIdx: 0 };
 
-            ${c.notes ? `<section><h2>Notas</h2>${asParagraphs(c.notes)}</section>` : ""}
-
-            <footer>
-              Casa Bruja · Panamá · Datos en vivo desde el ERP
-            </footer>
-          `;
+      async function boot() {
+        try {
+          const r = await fetch(`/api/junta/${token}`);
+          if (!r.ok) {
+            document.getElementById("root").outerHTML = `
+              <div class="screen">
+                <div class="big">Link inválido o expirado.</div>
+                <div>Pide a Jonathan un link nuevo.</div>
+              </div>`;
+            return;
+          }
+          STATE.data = await r.json();
+          render();
+          bindKeyboard();
+          // Honor hash on load
+          const h = window.location.hash.replace("#", "");
+          const idx = SLIDES.findIndex((s) => s.id === h);
+          if (idx >= 0) goTo(idx);
         } catch (err) {
           console.error(err);
-          root.innerHTML = '<div class="error"><strong>No se pudo cargar la página.</strong><br />' + escapeHtml(err.message) + "</div>";
+          document.getElementById("root").outerHTML = `
+            <div class="screen">
+              <div class="big">Error</div>
+              <div>${escapeHtml(err.message)}</div>
+            </div>`;
         }
       }
-      load();
+
+      function render() {
+        const root = document.getElementById("root");
+        root.classList.remove("screen");
+        root.innerHTML = `
+          <div class="app">
+            <aside>
+              <div class="brand">
+                <div class="wordmark">Casa Bruja</div>
+                <div class="sub">Sala de Junta</div>
+              </div>
+              <nav>
+                ${SLIDES.map((s, i) => `
+                  <div class="slide-link ${i === STATE.currentIdx ? "active" : ""}" data-idx="${i}">
+                    <span class="num">${s.num}</span>
+                    <span>${s.icon} ${s.title}</span>
+                  </div>
+                `).join("")}
+              </nav>
+              <div class="sidebar-footer">
+                Usa ← → para navegar<br />
+                ${STATE.data.updatedAt ? new Date(STATE.data.updatedAt).toLocaleDateString("es-PA") : ""}
+              </div>
+            </aside>
+            <main>
+              ${SLIDES.map((s, i) => `
+                <div class="slide ${i === STATE.currentIdx ? "active" : ""}" data-slide="${i}">
+                  ${s.render(STATE.data)}
+                </div>
+              `).join("")}
+              <div class="nav-hint">← ${STATE.currentIdx + 1} / ${SLIDES.length} →</div>
+            </main>
+          </div>
+        `;
+        // Bind click nav
+        root.querySelectorAll(".slide-link").forEach((el) => {
+          el.addEventListener("click", () => goTo(Number(el.dataset.idx)));
+        });
+        // Run afterRender for active slide (charts)
+        runAfterRender(STATE.currentIdx);
+      }
+
+      function runAfterRender(idx) {
+        const slide = SLIDES[idx];
+        if (slide.afterRender) {
+          // Use setTimeout so the DOM is definitely painted first
+          setTimeout(() => slide.afterRender(STATE.data), 20);
+        }
+      }
+
+      function goTo(idx) {
+        if (idx < 0 || idx >= SLIDES.length) return;
+        STATE.currentIdx = idx;
+        document.querySelectorAll(".slide-link").forEach((el) => {
+          el.classList.toggle("active", Number(el.dataset.idx) === idx);
+        });
+        document.querySelectorAll(".slide").forEach((el) => {
+          el.classList.toggle("active", Number(el.dataset.slide) === idx);
+        });
+        document.querySelector("main").scrollTop = 0;
+        document.querySelector(".nav-hint").textContent = `← ${idx + 1} / ${SLIDES.length} →`;
+        window.location.hash = SLIDES[idx].id;
+        runAfterRender(idx);
+      }
+
+      function bindKeyboard() {
+        window.addEventListener("keydown", (e) => {
+          // Ignore when typing
+          if (e.target.matches("input, textarea")) return;
+          if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+            e.preventDefault();
+            goTo(STATE.currentIdx + 1);
+          } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+            e.preventDefault();
+            goTo(STATE.currentIdx - 1);
+          } else if (e.key === "Home") {
+            e.preventDefault();
+            goTo(0);
+          } else if (e.key === "End") {
+            e.preventDefault();
+            goTo(SLIDES.length - 1);
+          }
+        });
+        window.addEventListener("hashchange", () => {
+          const h = window.location.hash.replace("#", "");
+          const idx = SLIDES.findIndex((s) => s.id === h);
+          if (idx >= 0 && idx !== STATE.currentIdx) goTo(idx);
+        });
+      }
+
+      boot();
     </script>
   </body>
 </html>
