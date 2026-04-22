@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node server.js"
   },
+  "dependencies": {
+    "postgres": "^3.4.4"
+  },
   "engines": {
     "node": ">=20"
   }

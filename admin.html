@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Casa Bruja · Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0f1115;
+        --bg-soft: #171a21;
+        --card: #1f232c;
+        --card-hover: #272c37;
+        --border: #2a2f3a;
+        --text: #e6e9ef;
+        --text-dim: #9aa3b2;
+        --accent: #f59e0b;
+        --accent-hover: #fbbf24;
+        --green: #34d399;
+        --cyan: #22d3ee;
+        --rose: #fb7185;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+      .wrap {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      h1 {
+        font-size: 32px;
+        font-weight: 800;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      .subtitle { color: var(--text-dim); font-size: 14px; margin: 0; }
+      .back {
+        color: var(--text-dim);
+        text-decoration: none;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .back:hover { color: var(--text); border-color: var(--accent); }
+      .section {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .section h2 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+      .section .section-sub { color: var(--text-dim); font-size: 13px; margin: 0 0 20px; }
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 16px;
+      }
+      .kpi {
+        background: var(--bg-soft);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 18px;
+      }
+      .kpi-label {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        font-weight: 600;
+      }
+      .kpi-value {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text);
+        margin-top: 4px;
+        letter-spacing: -0.01em;
+      }
+      .kpi-sub {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .kpi-value.green { color: var(--green); }
+      .kpi-value.cyan { color: var(--cyan); }
+      .kpi-value.accent { color: var(--accent); }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th {
+        text-align: left;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      tr:last-child td { border-bottom: none; }
+      .num {
+        font-family: "IBM Plex Mono", monospace;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .mono { font-family: "IBM Plex Mono", monospace; }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .pill-green { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+      .pill-cyan { background: rgba(34, 211, 238, 0.15); color: var(--cyan); }
+      .pill-rose { background: rgba(251, 113, 133, 0.15); color: var(--rose); }
+      .pill-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
+      .links {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .link-card {
+        background: var(--bg-soft);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.15s ease;
+      }
+      .link-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-1px);
+      }
+      .link-card h3 {
+        margin: 0 0 4px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .link-card p {
+        margin: 0;
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .loading {
+        color: var(--text-dim);
+        font-size: 13px;
+        padding: 20px 0;
+      }
+      .coming-soon {
+        border: 1px dashed var(--border);
+        background: transparent;
+        padding: 24px;
+        text-align: center;
+        color: var(--text-dim);
+        border-radius: 10px;
+        font-size: 13px;
+      }
+      .coming-soon strong { color: var(--accent); }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 800px) {
+        h1 { font-size: 24px; }
+        .two-col { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <div class="eyebrow">Admin</div>
+          <h1>Panel de Control</h1>
+          <p class="subtitle">Snapshot en tiempo real desde las 4 apps.</p>
+        </div>
+        <a class="back" href="/">← Volver al Hub</a>
+      </header>
+
+      <!-- Sales snapshot -->
+      <div class="section">
+        <h2>Ventas · Este mes / año</h2>
+        <p class="section-sub">Datos de csv_records (ventas completadas, matches con Dashboard de Facturación).</p>
+        <div id="sales-kpis" class="loading">Cargando ventas…</div>
+      </div>
+
+      <!-- Top customers + Invoice library in two columns -->
+      <div class="two-col">
+        <div class="section">
+          <h2>Top clientes · Este mes</h2>
+          <p class="section-sub">Por facturación en sales_line_items.</p>
+          <div id="top-customers" class="loading">Cargando…</div>
+        </div>
+        <div class="section">
+          <h2>Repositorio de Facturas</h2>
+          <p class="section-sub">Facturas recibidas de proveedores, por categoría.</p>
+          <div id="invoice-library" class="loading">Cargando…</div>
+        </div>
+      </div>
+
+      <!-- PO snapshot -->
+      <div class="section">
+        <h2>Órdenes de Compra · Últimos 30 días</h2>
+        <div id="po-snapshot" class="loading">Cargando…</div>
+      </div>
+
+      <!-- GL placeholder -->
+      <div class="section">
+        <h2>Libro Mayor / Estado de Resultados</h2>
+        <div class="coming-soon">
+          <strong>Pendiente de carga.</strong><br />
+          Cuando subas el general ledger + años anteriores, aparecerá aquí el análisis
+          de gastos, márgenes, EBITDA y comparativos YoY.
+        </div>
+      </div>
+
+      <!-- Quick links to each app's admin surface -->
+      <div class="section">
+        <h2>Accesos rápidos</h2>
+        <div class="links">
+          <a class="link-card" href="https://facturacion.casabruja.com/admin">
+            <h3>Usuarios &amp; permisos</h3>
+            <p>Gestión de contraseñas y accesos por sección</p>
+          </a>
+          <a class="link-card" href="https://facturacion.casabruja.com/dashboard">
+            <h3>Dashboard completo</h3>
+            <p>KPIs de ventas, drill-down por cliente/producto</p>
+          </a>
+          <a class="link-card" href="https://facturacion.casabruja.com/crecimiento">
+            <h3>Crecimiento MoM</h3>
+            <p>Growers, decliners, clientes nuevos y perdidos</p>
+          </a>
+          <a class="link-card" href="https://facturacion.casabruja.com/anio-vs-anio">
+            <h3>Año vs Año</h3>
+            <p>Comparación anual por mes</p>
+          </a>
+          <a class="link-card" href="https://facturacion.casabruja.com/marcas">
+            <h3>Performance por marca</h3>
+            <p>Revenue por cerveza, formato y canal</p>
+          </a>
+          <a class="link-card" href="https://facturacion.casabruja.com/vendedores">
+            <h3>Vendedores</h3>
+            <p>Performance del equipo de ventas</p>
+          </a>
+          <a class="link-card" href="https://compras.casabruja.com/invoice-library">
+            <h3>Repositorio facturas</h3>
+            <p>Drag-drop, categorías AI, búsqueda</p>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const money = (n) =>
+        "$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      const moneyFull = (n) =>
+        "$" + (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      async function fetchJson(url) {
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) throw new Error(`${url} → ${r.status}`);
+        return r.json();
+      }
+
+      function renderSalesKpis(data) {
+        if (!data) {
+          document.getElementById("sales-kpis").innerHTML =
+            '<div class="coming-soon">No se pudo cargar (DB?)</div>';
+          return;
+        }
+        const { mtd, ytd, customersThisYear, asOf } = data;
+        document.getElementById("sales-kpis").innerHTML = `
+          <div class="kpis">
+            <div class="kpi">
+              <div class="kpi-label">Ventas MTD</div>
+              <div class="kpi-value accent">${money(mtd.total)}</div>
+              <div class="kpi-sub">${mtd.invoices} facturas · al ${asOf}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Distribución MTD</div>
+              <div class="kpi-value cyan">${money(mtd.distribucion)}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Taproom MTD</div>
+              <div class="kpi-value green">${money(mtd.taproom)}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Ventas YTD</div>
+              <div class="kpi-value accent">${money(ytd.total)}</div>
+              <div class="kpi-sub">${ytd.invoices} facturas</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Clientes activos YTD</div>
+              <div class="kpi-value">${customersThisYear}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderTopCustomers(data) {
+        const rows = data?.topCustomersThisMonth ?? [];
+        if (rows.length === 0) {
+          document.getElementById("top-customers").innerHTML =
+            '<div class="coming-soon">Sin datos este mes todavía.</div>';
+          return;
+        }
+        document.getElementById("top-customers").innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th class="num">Facturas</th>
+                <th class="num">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `
+                <tr>
+                  <td>
+                    <div style="font-weight:500">${escapeHtml(r.name || r.customer_code)}</div>
+                    <div class="mono" style="font-size:10px;color:var(--text-dim)">${escapeHtml(r.customer_code)}</div>
+                  </td>
+                  <td class="num">${r.invoices}</td>
+                  <td class="num"><strong>${money(r.revenue)}</strong></td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function renderInvoiceLibrary(data) {
+        if (!data) {
+          document.getElementById("invoice-library").innerHTML =
+            '<div class="coming-soon">No hay repositorio configurado.</div>';
+          return;
+        }
+        const catLabels = {
+          brewing_raw_materials: "Materias primas",
+          brewing_packaging: "Empaque",
+          brewing_equipment: "Equipos/Repuestos",
+          logistics: "Logística",
+          taproom_food: "Taproom · food",
+          taproom_beverages: "Taproom · bebidas",
+          taproom_supplies: "Taproom · suministros",
+          utilities: "Servicios públicos",
+          services: "Servicios profesionales",
+          rent_facility: "Renta / seguridad",
+          other: "Otros",
+        };
+        document.getElementById("invoice-library").innerHTML = `
+          <div class="kpis" style="margin-bottom:16px">
+            <div class="kpi">
+              <div class="kpi-label">Total</div>
+              <div class="kpi-value">${data.total}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Correcciones AI</div>
+              <div class="kpi-value accent">${data.manualOverrides}</div>
+              <div class="kpi-sub">entrenan el clasificador</div>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th class="num">Facturas</th>
+                <th class="num">Total gastado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.byCategory
+                .map(
+                  (c) => `
+                <tr>
+                  <td>${escapeHtml(catLabels[c.category] || c.category)}</td>
+                  <td class="num">${c.c}</td>
+                  <td class="num">${money(c.total)}</td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function renderPoSnapshot(data) {
+        const rows = data?.last30Days ?? [];
+        if (rows.length === 0) {
+          document.getElementById("po-snapshot").innerHTML =
+            '<div class="coming-soon">Sin OC en los últimos 30 días.</div>';
+          return;
+        }
+        const statusPill = {
+          draft: "pill-amber",
+          sent: "pill-cyan",
+          received: "pill-green",
+          closed: "pill-green",
+          cancelled: "pill-rose",
+        };
+        document.getElementById("po-snapshot").innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th class="num">Cantidad</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `
+                <tr>
+                  <td><span class="pill ${statusPill[r.status] || "pill-amber"}">${escapeHtml(r.status)}</span></td>
+                  <td class="num">${r.c}</td>
+                  <td class="num">${money(r.total)}</td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      async function load() {
+        const tasks = [
+          fetchJson("/api/admin/sales-snapshot")
+            .then((data) => {
+              renderSalesKpis(data);
+              renderTopCustomers(data);
+            })
+            .catch((err) => {
+              console.error(err);
+              document.getElementById("sales-kpis").innerHTML =
+                '<div class="coming-soon">Error: ' + escapeHtml(err.message) + "</div>";
+              document.getElementById("top-customers").innerHTML =
+                '<div class="coming-soon">Error: ' + escapeHtml(err.message) + "</div>";
+            }),
+          fetchJson("/api/admin/invoice-library-snapshot")
+            .then(renderInvoiceLibrary)
+            .catch((err) => {
+              console.error(err);
+              document.getElementById("invoice-library").innerHTML =
+                '<div class="coming-soon">Error: ' + escapeHtml(err.message) + "</div>";
+            }),
+          fetchJson("/api/admin/po-snapshot")
+            .then(renderPoSnapshot)
+            .catch((err) => {
+              console.error(err);
+              document.getElementById("po-snapshot").innerHTML =
+                '<div class="coming-soon">Error: ' + escapeHtml(err.message) + "</div>";
+            }),
+        ];
+        await Promise.allSettled(tasks);
+      }
+
+      load();
+    </script>
+  </body>
+</html>

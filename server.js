@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import postgres from "postgres";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname);
@@ -89,6 +90,145 @@ function safeEqual(a, b) {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
   return timingSafeEqual(ba, bb);
+}
+
+// ─── Admin KPI queries ─────────────────────────────────────────────────────
+// Read-only snapshots from the shared Supabase DB. Auth-gated to admin
+// sessions only (checked in the request handler before these run).
+
+const DATABASE_URL = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+let _sql = null;
+function getSql() {
+  if (_sql) return _sql;
+  if (!DATABASE_URL) return null;
+  _sql = postgres(DATABASE_URL, {
+    ssl: { rejectUnauthorized: false },
+    max: 3,
+    prepare: false,
+    fetch_types: false,
+  });
+  return _sql;
+}
+
+/** YYYY-MM-DD in Panama (UTC-5). */
+function panamaToday() {
+  const now = new Date(Date.now() - 5 * 60 * 60 * 1000);
+  return now.toISOString().slice(0, 10);
+}
+
+/** First day of the current Panama month. */
+function panamaMonthStart() {
+  const today = panamaToday();
+  return today.slice(0, 7) + "-01";
+}
+
+/** First day of the current Panama year. */
+function panamaYearStart() {
+  return panamaToday().slice(0, 4) + "-01-01";
+}
+
+async function adminSalesSnapshot() {
+  const sql = getSql();
+  if (!sql) return null;
+  const today = panamaToday();
+  const monthStart = panamaMonthStart();
+  const yearStart = panamaYearStart();
+
+  // csv_records is the authoritative totals source (matches Jean's CSV
+  // uploads + the Dashboard summary cards). sales_line_items gives
+  // per-customer breakdown but csv_records has the dollars right.
+  const [mtd, ytd, topMonth, totalCustomers] = await Promise.all([
+    sql`
+      SELECT
+        COALESCE(SUM(subtotal), 0)::float AS total,
+        COALESCE(SUM(subtotal) FILTER (WHERE type = 'Taproom'), 0)::float AS taproom,
+        COALESCE(SUM(subtotal) FILTER (WHERE type <> 'Taproom'), 0)::float AS distribucion,
+        COUNT(*)::int AS invoices
+      FROM csv_records
+      WHERE "fileDate" >= ${monthStart} AND "fileDate" <= ${today}
+    `,
+    sql`
+      SELECT
+        COALESCE(SUM(subtotal), 0)::float AS total,
+        COALESCE(SUM(subtotal) FILTER (WHERE type = 'Taproom'), 0)::float AS taproom,
+        COALESCE(SUM(subtotal) FILTER (WHERE type <> 'Taproom'), 0)::float AS distribucion,
+        COUNT(*)::int AS invoices
+      FROM csv_records
+      WHERE "fileDate" >= ${yearStart} AND "fileDate" <= ${today}
+    `,
+    sql`
+      SELECT
+        s.customer_code,
+        COALESCE(cn.friendly_name, cn.razon_social, s.customer_code) AS name,
+        SUM(s.line_total)::float AS revenue,
+        COUNT(DISTINCT s.invoice_number)::int AS invoices
+      FROM sales_line_items s
+      LEFT JOIN customer_names cn ON cn.customer_code = s.customer_code
+      WHERE s.sale_date >= ${monthStart}
+        AND s.sale_date <= ${today}
+        AND s.customer_code IS NOT NULL
+        AND s.source_order_id IS NULL
+      GROUP BY s.customer_code, cn.friendly_name, cn.razon_social
+      ORDER BY revenue DESC
+      LIMIT 10
+    `,
+    sql`
+      SELECT COUNT(DISTINCT customer_code)::int AS c
+      FROM sales_line_items
+      WHERE sale_date >= ${yearStart}
+        AND customer_code IS NOT NULL
+        AND source_order_id IS NULL
+    `,
+  ]);
+
+  return {
+    asOf: today,
+    mtd: mtd[0],
+    ytd: ytd[0],
+    topCustomersThisMonth: topMonth,
+    customersThisYear: totalCustomers[0]?.c ?? 0,
+  };
+}
+
+async function adminInvoiceLibrarySnapshot() {
+  const sql = getSql();
+  if (!sql) return null;
+  const [byCategory, recentOverrides, total] = await Promise.all([
+    sql`
+      SELECT category::text AS category, COUNT(*)::int AS c, COALESCE(SUM(total_amount), 0)::float AS total
+      FROM supplier_invoices
+      GROUP BY category
+      ORDER BY total DESC
+    `,
+    sql`
+      SELECT COUNT(*)::int AS c
+      FROM supplier_invoices
+      WHERE category_was_manual = true
+    `,
+    sql`SELECT COUNT(*)::int AS c FROM supplier_invoices`,
+  ]);
+  return {
+    total: total[0]?.c ?? 0,
+    manualOverrides: recentOverrides[0]?.c ?? 0,
+    byCategory,
+  };
+}
+
+async function adminPoSnapshot() {
+  const sql = getSql();
+  if (!sql) return null;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = await sql`
+    SELECT
+      status::text AS status,
+      COUNT(*)::int AS c,
+      COALESCE(SUM(total), 0)::float AS total
+    FROM purchase_orders
+    WHERE created_at >= ${thirtyDaysAgo}
+    GROUP BY status
+    ORDER BY c DESC
+  `;
+  return { last30Days: rows };
 }
 
 // ─── Static + routing ──────────────────────────────────────────────────────
@@ -191,6 +331,49 @@ const server = createServer(async (req, res) => {
     if (!session) {
       res.writeHead(302, { location: "/login" });
       return res.end();
+    }
+
+    // ─── Admin-only KPI API ────────────────────────────────────────────
+    // These must sit behind the same auth + require the admin role.
+    if (path.startsWith("/api/admin/")) {
+      if (session.role !== "admin") {
+        res.writeHead(403, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: "admin only" }));
+      }
+      try {
+        let data = null;
+        if (path === "/api/admin/sales-snapshot") data = await adminSalesSnapshot();
+        else if (path === "/api/admin/invoice-library-snapshot") data = await adminInvoiceLibrarySnapshot();
+        else if (path === "/api/admin/po-snapshot") data = await adminPoSnapshot();
+        else {
+          res.writeHead(404, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ error: "unknown admin endpoint" }));
+        }
+        if (data === null) {
+          res.writeHead(503, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ error: "DATABASE_URL not configured" }));
+        }
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        return res.end(JSON.stringify(data));
+      } catch (err) {
+        console.error("[hub] admin API error:", err);
+        res.writeHead(500, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: "query failed" }));
+      }
+    }
+
+    // /admin — admin-only dashboard page
+    if (path === "/admin" || path === "/admin/") {
+      if (session.role !== "admin") {
+        res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+        return res.end("Solo administradores.");
+      }
+      const served = await serveFile(res, join(ROOT, "admin.html"));
+      if (!served) {
+        res.writeHead(500);
+        res.end("admin page missing");
+      }
+      return;
     }
 
     // Authenticated → serve the portal
