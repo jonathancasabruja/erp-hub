@@ -245,7 +245,6 @@ const SECTIONS_BY_APP = {
     { key: "purchase_orders", label: "Órdenes de compra" },
     { key: "cost_invoices", label: "Fletes y gastos" },
     { key: "invoice_library", label: "Repositorio de facturas" },
-    { key: "personal_eventual", label: "Personal eventual" },
     { key: "servicios_profesionales", label: "Servicios profesionales" },
   ],
   brewery: [],
