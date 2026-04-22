@@ -472,117 +472,30 @@
           num: "03",
           title: "Ventas",
           icon: "📊",
+          // This slide embeds the exact same Dashboard component that lives
+          // at facturacion.casabruja.com/dashboard — Jonathan fixes it in
+          // one place, the board sees the update automatically. No drift
+          // between the internal dashboard and the board-facing view.
           render: (data) => {
-            const sales = data.sales;
-            const trend = data.monthlyTrend || [];
-            if (!sales) {
-              return `<div class="slide-title">Ventas</div><div class="coming-soon">Sin datos de ventas disponibles.</div>`;
-            }
-            const mtd = sales.mtd || {};
-            const ytd = sales.ytd || {};
-            // YoY delta if we have it — compare Jan-today of this year vs same window of last year
-            // (fallback: don't show)
+            const src = "https://facturacion.casabruja.com/dashboard-embed";
             return `
               <div class="slide-eyebrow">Ventas</div>
-              <h2 class="slide-title">Desempeño de ventas</h2>
-              <p class="slide-sub">Al ${sales.asOf} · Datos directos de csv_records + sales_line_items</p>
-
-              <div class="section-h">Mes en curso (MTD)</div>
-              <div class="kpi-row">
-                <div class="kpi">
-                  <div class="label">Ventas MTD</div>
-                  <div class="value gold">${money(mtd.total)}</div>
-                  <div class="sub">${mtd.invoices || 0} facturas</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Distribución</div>
-                  <div class="value cyan">${money(mtd.distribucion)}</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Taproom</div>
-                  <div class="value green">${money(mtd.taproom)}</div>
-                </div>
+              <h2 class="slide-title">Dashboard de Ventas</h2>
+              <p class="slide-sub">Mismo dashboard que el equipo usa en Facturación — cualquier corrección se propaga aquí.</p>
+              <div style="background: white; border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
+                <iframe
+                  src="${src}"
+                  title="Dashboard de ventas"
+                  style="width: 100%; height: 1400px; border: 0; display: block; background: white;"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                ></iframe>
               </div>
-
-              <div class="section-h">Año en curso (YTD)</div>
-              <div class="kpi-row">
-                <div class="kpi">
-                  <div class="label">Ventas YTD</div>
-                  <div class="value gold">${money(ytd.total)}</div>
-                  <div class="sub">${ytd.invoices || 0} facturas</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Distribución YTD</div>
-                  <div class="value cyan">${money(ytd.distribucion)}</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Taproom YTD</div>
-                  <div class="value green">${money(ytd.taproom)}</div>
-                </div>
-                <div class="kpi">
-                  <div class="label">Clientes activos</div>
-                  <div class="value purple">${sales.customersThisYear || 0}</div>
-                </div>
-              </div>
-
-              ${trend.length > 0 ? `
-                <div class="section-h">Evolución últimos 12 meses</div>
-                <div class="chart-wrap tall"><canvas id="chart-trend"></canvas></div>
-              ` : ""}
-
               ${data.content?.kpiCommentary ? `
-                <div class="section-h">Comentarios</div>
+                <div class="section-h">Comentarios de Jonathan</div>
                 <div class="prose">${escapeHtml(data.content.kpiCommentary)}</div>
               ` : ""}
             `;
-          },
-          afterRender: (data) => {
-            const trend = data.monthlyTrend || [];
-            if (trend.length === 0) return;
-            const ctx = document.getElementById("chart-trend");
-            if (!ctx) return;
-            new Chart(ctx, {
-              type: "line",
-              data: {
-                labels: trend.map((t) => t.month),
-                datasets: [
-                  {
-                    label: "Distribución",
-                    data: trend.map((t) => t.distribucion),
-                    borderColor: "#38bdf8",
-                    backgroundColor: "rgba(56, 189, 248, 0.1)",
-                    fill: true,
-                    tension: 0.35,
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    pointBackgroundColor: "#38bdf8",
-                  },
-                  {
-                    label: "Taproom",
-                    data: trend.map((t) => t.taproom),
-                    borderColor: "#34d399",
-                    backgroundColor: "rgba(52, 211, 153, 0.1)",
-                    fill: true,
-                    tension: 0.35,
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    pointBackgroundColor: "#34d399",
-                  },
-                ],
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { labels: { color: "#f0f4fa", font: { size: 13 } } },
-                  tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${money(ctx.parsed.y)}` } },
-                },
-                scales: {
-                  x: { ticks: { color: "#8b95a8" }, grid: { color: "rgba(255,255,255,0.04)" } },
-                  y: { ticks: { color: "#8b95a8", callback: (v) => money(v) }, grid: { color: "rgba(255,255,255,0.04)" } },
-                },
-              },
-            });
           },
         },
         {
