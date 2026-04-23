@@ -645,10 +645,38 @@
           <div id="f-app-cards"></div>
         </div>
 
-        <div style="display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;">
+        <div style="display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; flex-wrap: wrap;">
           <button class="btn btn-secondary" id="btn-cancel-user">Cancelar</button>
+          <button class="btn btn-secondary btn-sm" id="btn-reset-pw" style="display: none;" title="Generar una contraseña temporal y forzarle cambiar al entrar">
+            🔑 Resetear contraseña
+          </button>
           <button class="btn btn-danger btn-sm" id="btn-delete-user" style="display: none;">Eliminar</button>
           <button class="btn" id="btn-save-user">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Password-reset result modal — shows the generated temp password
+         so the admin can copy/share it. -->
+    <div class="dialog-backdrop" id="pw-result-backdrop">
+      <div class="dialog" style="max-width: 480px;">
+        <h3 style="margin-top:0">🔑 Contraseña reseteada</h3>
+        <p style="color:var(--text-dim); font-size: 13px; margin: 0 0 12px;">
+          Comparte esta contraseña con <strong id="pw-result-user">el usuario</strong>.
+          Se les pedirá cambiarla al entrar. <strong>No la vas a poder ver de nuevo</strong>
+          — cópiala ahora.
+        </p>
+        <div style="display: flex; gap: 8px; align-items: center; margin: 14px 0;">
+          <input
+            type="text"
+            id="pw-result-value"
+            readonly
+            style="flex: 1; background: var(--bg-soft); color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 700;"
+          />
+          <button class="btn btn-secondary btn-sm" id="pw-result-copy">Copiar</button>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn" id="pw-result-close">Listo</button>
         </div>
       </div>
     </div>
@@ -1128,6 +1156,11 @@
         document.getElementById("f-role").value = user?.role ?? "user";
         document.getElementById("f-password-row").style.display = isNew ? "flex" : "none";
         document.getElementById("btn-delete-user").style.display = isNew ? "none" : "inline-block";
+        document.getElementById("btn-reset-pw").style.display = isNew ? "none" : "inline-block";
+        // Stash the current user so the reset-pw handler can use it
+        document.getElementById("btn-reset-pw").dataset.userId = user?.id ?? "";
+        document.getElementById("btn-reset-pw").dataset.userName = user?.displayName ?? "";
+        document.getElementById("btn-reset-pw").dataset.userEmail = user?.email ?? "";
 
         // Build per-app permission cards. Each card has quick-grant buttons
         // (none/view/edit) that cascade into the sections for that app,
@@ -1308,6 +1341,72 @@
           loadUsers();
         } catch (err) {
           alert("Error: " + err.message);
+        }
+      });
+
+      // ── Password reset ──────────────────────────────────────────
+      // Generates an easy-to-share temporary password, calls the admin
+      // reset endpoint with must_change=true so the user is forced to
+      // set their own on next login, then shows the generated value in
+      // a modal the admin can copy.
+      function generateTempPassword() {
+        // Readable by eye/phone: avoid i/I/l/1/o/O/0. 8 chars = plenty.
+        const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+        let out = "";
+        const buf = new Uint32Array(8);
+        crypto.getRandomValues(buf);
+        for (let i = 0; i < 8; i++) out += chars[buf[i] % chars.length];
+        return out;
+      }
+
+      document.getElementById("btn-reset-pw").addEventListener("click", async () => {
+        const btn = document.getElementById("btn-reset-pw");
+        const id = Number(btn.dataset.userId);
+        const name = btn.dataset.userName || "este usuario";
+        const email = btn.dataset.userEmail || "";
+        if (!id) return;
+        const temp = generateTempPassword();
+        if (!confirm(
+          `¿Resetear la contraseña de ${name} (${email}) a una nueva temporal?\n\n` +
+          `• El usuario tendrá que cambiarla al entrar\n` +
+          `• Vas a ver la contraseña después de confirmar — cópiala para compartirla`,
+        )) return;
+        try {
+          await fetchJson("/api/admin/users/reset-password", {
+            method: "POST",
+            body: { id, newPassword: temp, mustChange: true },
+          });
+          // Show the generated password in the result modal
+          document.getElementById("pw-result-user").textContent = name;
+          document.getElementById("pw-result-value").value = temp;
+          document.getElementById("pw-result-backdrop").classList.add("open");
+        } catch (err) {
+          alert("Error reseteando: " + err.message);
+        }
+      });
+
+      document.getElementById("pw-result-copy").addEventListener("click", async () => {
+        const v = document.getElementById("pw-result-value").value;
+        try {
+          await navigator.clipboard.writeText(v);
+          const btn = document.getElementById("pw-result-copy");
+          const orig = btn.textContent;
+          btn.textContent = "✓ Copiado";
+          setTimeout(() => (btn.textContent = orig), 1500);
+        } catch {
+          document.getElementById("pw-result-value").select();
+          document.execCommand("copy");
+        }
+      });
+      document.getElementById("pw-result-close").addEventListener("click", () => {
+        document.getElementById("pw-result-backdrop").classList.remove("open");
+        // Wipe the value so it doesn't linger in the DOM
+        document.getElementById("pw-result-value").value = "";
+      });
+      document.getElementById("pw-result-backdrop").addEventListener("click", (e) => {
+        if (e.target.id === "pw-result-backdrop") {
+          document.getElementById("pw-result-backdrop").classList.remove("open");
+          document.getElementById("pw-result-value").value = "";
         }
       });
 
