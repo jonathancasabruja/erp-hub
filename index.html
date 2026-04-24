@@ -135,36 +135,36 @@
         <p class="subtitle">Sistema unificado de gestión</p>
       </header>
 
-      <div class="grid">
-        <a class="card" href="https://recibos.casabruja.com">
+      <div class="grid" id="appGrid">
+        <a class="card" data-app="recibos" href="https://recibos.casabruja.com">
           <div class="icon">🏦</div>
           <h2>Recibos Banco</h2>
           <p>Conciliación bancaria del Taproom. Carga recibos Z y estados de cuenta.</p>
           <span class="url">Abrir &rarr;</span>
         </a>
 
-        <a class="card" href="https://brewery.casabruja.com">
+        <a class="card" data-app="brewery" href="https://brewery.casabruja.com">
           <div class="icon">🍺</div>
           <h2>Brewery Dashboard</h2>
           <p>Producción, inventario y seguimiento de lotes de cerveza.</p>
           <span class="url">Abrir &rarr;</span>
         </a>
 
-        <a class="card" href="https://facturacion.casabruja.com">
+        <a class="card" data-app="facturacion" href="https://facturacion.casabruja.com">
           <div class="icon">🧾</div>
           <h2>Facturación</h2>
           <p>Visor de ventas y procesamiento de exports del POS.</p>
           <span class="url">Abrir &rarr;</span>
         </a>
 
-        <a class="card" href="https://compras.casabruja.com">
+        <a class="card" data-app="compras" href="https://compras.casabruja.com">
           <div class="icon">📋</div>
           <h2>Compras y Personal</h2>
           <p>Órdenes de compra, fletes y gastos, servicios profesionales y personal eventual.</p>
           <span class="url">Abrir &rarr;</span>
         </a>
 
-        <a class="card" href="/admin" style="border-color: var(--accent);">
+        <a class="card" data-app="_admin" href="/admin" style="border-color: var(--accent);">
           <div class="icon">🛡️</div>
           <h2>Admin · Panel de control</h2>
           <p>Snapshot unificado de ventas, facturas, OCs y usuarios. Solo administradores.</p>
@@ -174,5 +174,54 @@
 
       <footer>Casa Bruja &middot; Panamá</footer>
     </div>
+    <script>
+      // Filter tiles based on the cb_session_meta cookie so users only see
+      // apps they have access to. Admins + legacy sessions see everything.
+      // The cookie is a base64-encoded JSON blob the server sets at login;
+      // shape matches facturacion's: { role, permissions: { _apps: {...} } }.
+      (function () {
+        function readMeta() {
+          const match = /(?:^|;\s*)cb_session_meta=([^;]+)/.exec(document.cookie);
+          if (!match) return null;
+          try {
+            return JSON.parse(atob(decodeURIComponent(match[1])));
+          } catch {
+            return null;
+          }
+        }
+        function levelForApp(meta, appKey) {
+          if (!meta) return "view"; // no cookie → assume legacy, show all
+          if (meta.legacy || meta.role === "admin") return "edit";
+          const apps = (meta.permissions && meta.permissions._apps) || {};
+          const lvl = apps[appKey];
+          if (!lvl || lvl === "none") return null;
+          return lvl;
+        }
+        const meta = readMeta();
+        const cards = document.querySelectorAll(".card[data-app]");
+        cards.forEach((card) => {
+          const appKey = card.getAttribute("data-app");
+          // /admin tile is role-gated separately
+          if (appKey === "_admin") {
+            if (!meta || (meta.role !== "admin" && !meta.legacy)) {
+              card.remove();
+            }
+            return;
+          }
+          const lvl = levelForApp(meta, appKey);
+          if (!lvl) card.remove();
+        });
+        // If the user is logged in but nothing visible, show a friendly note
+        if (!document.querySelectorAll(".card[data-app]").length) {
+          const grid = document.getElementById("appGrid");
+          grid.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:40px 20px;">No tiene módulos asignados. Contacte al administrador.</div>';
+        }
+        // Show a greeting with the user name if we have it
+        if (meta && meta.name) {
+          const sub = document.querySelector(".subtitle");
+          if (sub) sub.textContent = "Bienvenido/a, " + meta.name;
+        }
+      })();
+    </script>
   </body>
 </html>

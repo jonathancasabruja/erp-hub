@@ -73,17 +73,29 @@ function parseCookies(header = "") {
   return out;
 }
 
-function setSessionCookie(res, token) {
+function buildCookie(name, value, { httpOnly = true } = {}) {
   const parts = [
-    `${COOKIE_NAME}=${token}`,
+    `${name}=${value}`,
     `Max-Age=${ONE_YEAR}`,
     "Path=/",
-    "HttpOnly",
     "Secure",
     "SameSite=None",
   ];
+  if (httpOnly) parts.push("HttpOnly");
   if (COOKIE_DOMAIN) parts.push(`Domain=${COOKIE_DOMAIN}`);
-  res.setHeader("Set-Cookie", parts.join("; "));
+  return parts.join("; ");
+}
+
+function setSessionCookie(res, token, metaCookie = null) {
+  const cookies = [buildCookie(COOKIE_NAME, token, { httpOnly: true })];
+  if (metaCookie) cookies.push(metaCookie);
+  res.setHeader("Set-Cookie", cookies);
+}
+
+function setSessionWithMeta(res, token, meta) {
+  const metaB64 = Buffer.from(JSON.stringify(meta)).toString("base64");
+  const metaCookie = buildCookie("cb_session_meta", metaB64, { httpOnly: false });
+  setSessionCookie(res, token, metaCookie);
 }
 
 function safeEqual(a, b) {
@@ -261,6 +273,34 @@ const APP_LABELS = {
 // Flat union of all section keys across apps — the server accepts any of
 // these in the permissions payload.
 const SECTION_KEYS = Object.values(SECTIONS_BY_APP).flatMap((s) => s.map((x) => x.key));
+
+/**
+ * Look up an app_users row by email (case-insensitive). Returns the raw row
+ * including password_hash so the login handler can bcrypt-compare. Callers
+ * MUST NOT leak password_hash back to the client.
+ */
+async function findAppUserByEmail(email) {
+  const sql = getSql();
+  if (!sql) return null;
+  const [row] = await sql`
+    SELECT id, email, password_hash, display_name, role, permissions,
+           active, must_change
+    FROM app_users
+    WHERE LOWER(email) = ${String(email).toLowerCase().trim()}
+    LIMIT 1
+  `;
+  return row ?? null;
+}
+
+async function touchAppUserLogin(id) {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`UPDATE app_users SET updated_at = NOW() WHERE id = ${id}`;
+  } catch {
+    // best-effort; don't block login on this
+  }
+}
 
 async function adminListUsers() {
   const sql = getSql();
@@ -676,15 +716,74 @@ const server = createServer(async (req, res) => {
     const path = url.pathname;
 
     // POST /api/login — issue the shared JWT cookie
+    //
+    // Two paths:
+    //   A. email + password → app_users lookup → bcrypt compare. JWT carries
+    //      userId + role + permissions. `cb_session_meta` cookie lets every
+    //      .casabruja.com app filter its sidebar without a round-trip.
+    //   B. legacy password-only → APP_PASSWORD/ACCOUNTANT_PASSWORD shared
+    //      master. Kept so existing bookmarks + the non-migrated apps keep
+    //      working through the transition.
     if (req.method === "POST" && path === "/api/login") {
-      if (!ADMIN_PASSWORD) {
-        res.writeHead(500, { "content-type": "application/json" });
-        return res.end(JSON.stringify({ error: "APP_PASSWORD not configured" }));
-      }
       const body = await readJsonBody(req);
       if (!body) {
         res.writeHead(400, { "content-type": "application/json" });
         return res.end(JSON.stringify({ error: "Invalid JSON" }));
+      }
+
+      // Path A — email + password against app_users
+      if (typeof body.email === "string" && body.email.trim()) {
+        try {
+          const user = await findAppUserByEmail(body.email);
+          if (!user || !user.active) {
+            res.writeHead(401, { "content-type": "application/json" });
+            return res.end(JSON.stringify({ error: "Credenciales incorrectas" }));
+          }
+          const ok = await bcrypt.compare(String(body.password ?? ""), user.password_hash);
+          if (!ok) {
+            res.writeHead(401, { "content-type": "application/json" });
+            return res.end(JSON.stringify({ error: "Credenciales incorrectas" }));
+          }
+          await touchAppUserLogin(user.id);
+          const openId = `app_${user.id}`;
+          const token = signJWT({
+            openId,
+            appId: "casabruja-erp",
+            name: user.display_name,
+            role: user.role,
+            userId: user.id,
+          });
+          const meta = {
+            userId: user.id,
+            email: user.email,
+            name: user.display_name,
+            role: user.role,
+            permissions: user.permissions ?? {},
+            mustChange: user.must_change,
+          };
+          setSessionWithMeta(res, token, meta);
+          res.writeHead(200, { "content-type": "application/json" });
+          return res.end(JSON.stringify({
+            success: true,
+            user: {
+              name: user.display_name,
+              email: user.email,
+              role: user.role,
+              permissions: user.permissions ?? {},
+              mustChange: user.must_change,
+            },
+          }));
+        } catch (err) {
+          console.error("[hub] login email path error:", err);
+          res.writeHead(500, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ error: "Error de autenticación" }));
+        }
+      }
+
+      // Path B — legacy password-only
+      if (!ADMIN_PASSWORD) {
+        res.writeHead(500, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: "APP_PASSWORD not configured" }));
       }
       const pw = typeof body.password === "string" ? body.password : "";
       let role = null;
@@ -698,9 +797,67 @@ const server = createServer(async (req, res) => {
         (role === "accountant" ? "Contador" : "Usuario");
       const openId = `local_${role}_${name.toLowerCase().replace(/\s+/g, "_")}`;
       const token = signJWT({ openId, appId: "casabruja-erp", name, role });
-      setSessionCookie(res, token);
+      const meta = {
+        userId: 0,
+        email: null,
+        name,
+        role,
+        permissions: {},
+        mustChange: false,
+        legacy: true,
+      };
+      setSessionWithMeta(res, token, meta);
       res.writeHead(200, { "content-type": "application/json" });
-      return res.end(JSON.stringify({ success: true, user: { name, role } }));
+      return res.end(JSON.stringify({ success: true, user: { name, role, legacy: true } }));
+    }
+
+    // GET /api/me — echo the current session's user + permissions so the
+    // client can render the right portal tiles without decoding the JWT.
+    if (req.method === "GET" && path === "/api/me") {
+      const cookies = parseCookies(req.headers.cookie);
+      const session = verifyJWT(cookies[COOKIE_NAME]);
+      if (!session) {
+        res.writeHead(401, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ authenticated: false }));
+      }
+      // Refresh from DB when the JWT points to an app_users row.
+      if (session.userId) {
+        try {
+          const sql = getSql();
+          if (sql) {
+            const [fresh] = await sql`
+              SELECT id, email, display_name, role, permissions, active, must_change
+              FROM app_users WHERE id = ${session.userId} LIMIT 1
+            `;
+            if (fresh && fresh.active) {
+              res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+              return res.end(JSON.stringify({
+                authenticated: true,
+                user: {
+                  id: fresh.id,
+                  name: fresh.display_name,
+                  email: fresh.email,
+                  role: fresh.role,
+                  permissions: fresh.permissions ?? {},
+                  mustChange: fresh.must_change,
+                },
+              }));
+            }
+          }
+        } catch (err) {
+          console.error("[hub] /api/me refresh error:", err);
+        }
+      }
+      // Fallback: trust the JWT claims
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({
+        authenticated: true,
+        user: {
+          name: session.name,
+          role: session.role,
+          legacy: !session.userId,
+        },
+      }));
     }
 
     // GET /login — serve the login page (always, no auth)
