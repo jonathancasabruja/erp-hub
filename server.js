@@ -259,8 +259,27 @@ const SECTIONS_BY_APP = {
     { key: "invoice_library", label: "Repositorio de facturas" },
     { key: "servicios_profesionales", label: "Servicios profesionales" },
   ],
-  brewery: [],
-  recibos: [],
+  brewery: [
+    // Grouped to match the sidebar sections in DashboardLayout.tsx.
+    // Keys chosen to match navGroup label slugs so brewery can enforce
+    // them later without a rename.
+    { key: "planning", label: "Planning (Status, Planner)" },
+    { key: "production", label: "Producción (ColdBlock, Filtración, Dry Hop, Packaging)" },
+    { key: "recetario", label: "Recetario (Profiles, Recetas, Ferm Curves)" },
+    { key: "inventory", label: "Inventario (Raw/FG/Packaging, Cardex, Conversions)" },
+    { key: "sales", label: "Sales Dashboard" },
+    { key: "dashboards", label: "Dashboards (Batch Journey, Stage Summary, Efficiency, Import, Reversals, Usage)" },
+  ],
+  recibos: [
+    // One key per top-level page so Jonathan can grant cashier-only or
+    // bank-only access without opening everything.
+    { key: "banco", label: "Banco (Credicorp / Yappy / Conciliación)" },
+    { key: "recibos_z", label: "Recibos Z" },
+    { key: "cierre_caja", label: "Cierre de Caja" },
+    { key: "pedidosya", label: "PedidosYa" },
+    { key: "cajero", label: "Cajero (entrada rápida)" },
+    { key: "settings", label: "Configuración" },
+  ],
 };
 
 const APP_KEYS = ["facturacion", "brewery", "compras", "recibos"];
