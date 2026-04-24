@@ -295,6 +295,36 @@
         max-height: 90vh;
         overflow-y: auto;
       }
+      /* When a dialog has a .dialog-actions child, switch to a flex layout
+         so the button row stays pinned to the bottom even when the content
+         overflows. Prevents "Guardar" from scrolling off the fold when the
+         permissions grid is tall. */
+      .dialog:has(.dialog-actions) {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        overflow: hidden;
+      }
+      .dialog:has(.dialog-actions) > h3 {
+        padding: 24px 24px 0;
+        margin-bottom: 16px;
+      }
+      .dialog-body {
+        padding: 0 24px 16px;
+        overflow-y: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .dialog-actions {
+        padding: 14px 24px;
+        border-top: 1px solid var(--border);
+        background: var(--card);
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+      }
       .dialog h3 {
         margin: 0 0 16px;
         font-size: 16px;
@@ -630,36 +660,38 @@
     <div class="dialog-backdrop" id="user-dialog-backdrop">
       <div class="dialog">
         <h3 id="user-dialog-title">Nuevo usuario</h3>
-        <input type="hidden" id="f-user-id" />
-        <div class="form-row">
-          <label>Nombre</label>
-          <input type="text" id="f-display-name" placeholder="Juan Pérez" />
-        </div>
-        <div class="form-row">
-          <label>Email</label>
-          <input type="email" id="f-email" placeholder="juan@casabruja.com" />
-        </div>
-        <div class="form-row" id="f-password-row">
-          <label>Contraseña</label>
-          <input type="text" id="f-password" placeholder="Genera una temporal; el usuario la cambiará al entrar" />
-        </div>
-        <div class="form-row">
-          <label>Rol</label>
-          <select id="f-role">
-            <option value="user">Usuario</option>
-            <option value="admin">Admin (acceso total)</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label>Acceso por app</label>
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">
-            Da acceso al app completo, o click en "Detallar" para asignar permisos por menú.
+        <div class="dialog-body">
+          <input type="hidden" id="f-user-id" />
+          <div class="form-row">
+            <label>Nombre</label>
+            <input type="text" id="f-display-name" placeholder="Juan Pérez" />
           </div>
-          <div id="f-app-cards"></div>
+          <div class="form-row">
+            <label>Email</label>
+            <input type="email" id="f-email" placeholder="juan@casabruja.com" />
+          </div>
+          <div class="form-row" id="f-password-row">
+            <label>Contraseña</label>
+            <input type="text" id="f-password" placeholder="Genera una temporal; el usuario la cambiará al entrar" />
+          </div>
+          <div class="form-row">
+            <label>Rol</label>
+            <select id="f-role">
+              <option value="user">Usuario</option>
+              <option value="admin">Admin (acceso total)</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>Acceso por app</label>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">
+              Da acceso al app completo, o click en "Detallar" para asignar permisos por menú.
+            </div>
+            <div id="f-app-cards"></div>
+          </div>
         </div>
 
-        <div style="display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; flex-wrap: wrap;">
+        <div class="dialog-actions">
           <button class="btn btn-secondary" id="btn-cancel-user">Cancelar</button>
           <button class="btn btn-secondary btn-sm" id="btn-reset-pw" style="display: none;" title="Generar una contraseña temporal y forzarle cambiar al entrar">
             🔑 Resetear contraseña
