@@ -811,6 +811,24 @@ const server = createServer(async (req, res) => {
       return res.end(JSON.stringify({ success: true, user: { name, role, legacy: true } }));
     }
 
+    // POST /api/logout — clear both session cookies on .casabruja.com so
+    // the user is signed out of every subdomain (SSO cuts both ways).
+    // Accepts GET too for <a href=...> fallback if JS is broken.
+    if (path === "/api/logout" && (req.method === "POST" || req.method === "GET")) {
+      const expire = (name) => {
+        const parts = [`${name}=`, "Path=/", "Max-Age=0", "Secure", "SameSite=None"];
+        if (COOKIE_DOMAIN) parts.push(`Domain=${COOKIE_DOMAIN}`);
+        return parts.join("; ");
+      };
+      res.setHeader("Set-Cookie", [expire(COOKIE_NAME), expire("cb_session_meta")]);
+      if (req.method === "GET") {
+        res.writeHead(302, { location: "/login" });
+        return res.end();
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ ok: true }));
+    }
+
     // GET /api/me — echo the current session's user + permissions so the
     // client can render the right portal tiles without decoding the JWT.
     if (req.method === "GET" && path === "/api/me") {

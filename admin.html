@@ -462,8 +462,22 @@
           <h1>Panel de Control</h1>
           <p class="subtitle">Un solo lugar para ventas, usuarios, notas y accesos.</p>
         </div>
-        <a class="back" href="/">← Volver al Hub</a>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+          <a class="back" href="/">← Volver al Hub</a>
+          <a class="back" id="adminLogout" href="/api/logout" style="color: var(--rose);">Cerrar sesión</a>
+        </div>
       </header>
+      <script>
+        (function () {
+          const el = document.getElementById("adminLogout");
+          if (!el) return;
+          el.addEventListener("click", (e) => {
+            e.preventDefault();
+            fetch("/api/logout", { method: "POST", credentials: "include" })
+              .finally(() => { window.location.href = "/login"; });
+          });
+        })();
+      </script>
 
       <div class="tabs">
         <button class="tab active" data-tab="overview">Overview</button>

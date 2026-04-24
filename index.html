@@ -117,6 +117,28 @@
         color: var(--text-dim);
         font-size: 13px;
       }
+      .topbar {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+      .topbar .who {
+        color: var(--text);
+      }
+      .topbar a {
+        color: var(--accent);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .topbar a:hover {
+        color: var(--accent-hover);
+        text-decoration: underline;
+      }
       @media (max-width: 600px) {
         h1 {
           font-size: 32px;
@@ -124,10 +146,19 @@
         .wrap {
           padding: 48px 20px 64px;
         }
+        .topbar {
+          top: 12px;
+          right: 16px;
+          font-size: 12px;
+        }
       }
     </style>
   </head>
   <body>
+    <div class="topbar">
+      <span class="who" id="whoLabel"></span>
+      <a id="logoutLink" href="/api/logout">Cerrar sesión</a>
+    </div>
     <div class="wrap">
       <header>
         <div class="logo">Casa Bruja</div>
@@ -220,6 +251,18 @@
         if (meta && meta.name) {
           const sub = document.querySelector(".subtitle");
           if (sub) sub.textContent = "Bienvenido/a, " + meta.name;
+          const who = document.getElementById("whoLabel");
+          if (who) who.textContent = meta.name;
+        }
+        // Wire logout — POST to /api/logout, then bounce to /login. The
+        // href fallback still works if JS is disabled.
+        const logoutLink = document.getElementById("logoutLink");
+        if (logoutLink) {
+          logoutLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            fetch("/api/logout", { method: "POST", credentials: "include" })
+              .finally(() => { window.location.href = "/login"; });
+          });
         }
       })();
     </script>
