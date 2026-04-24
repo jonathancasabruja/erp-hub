@@ -1320,8 +1320,23 @@
         //   No active button = "none" (don't serialize).
         // - Per-section overrides: each sections-grid dropdown; skip
         //   ones set to "none".
+        // - Cascade: any section granted implies the parent app is at
+        //   least "view" (upgraded to "edit" if the section is "edit").
+        //   Without this the user gets a section but no _apps entry, so
+        //   the hub hides the tile and the app gate blocks them. Fixed
+        //   for Reinier 2026-04-24.
         const perms = {};
         const apps = {};
+        const sectionToApp = {};
+        Object.entries(meta.sectionsByApp || {}).forEach(([app, sections]) => {
+          (sections || []).forEach((s) => { sectionToApp[s.key] = app; });
+        });
+        const levelRank = { none: 0, view: 1, edit: 2 };
+        function bumpApp(app, lvl) {
+          if (!lvl || lvl === "none") return;
+          const prev = apps[app];
+          if (!prev || levelRank[lvl] > levelRank[prev]) apps[app] = lvl;
+        }
         document.querySelectorAll("[data-grant-group]").forEach((group) => {
           const app = group.dataset.grantGroup;
           const active = group.querySelector("button.active");
@@ -1329,7 +1344,12 @@
           if (level !== "none") apps[app] = level;
         });
         document.querySelectorAll("[data-sections-grid] select").forEach((sel) => {
-          if (sel.value !== "none") perms[sel.dataset.section] = sel.value;
+          const lvl = sel.value;
+          if (lvl !== "none") {
+            perms[sel.dataset.section] = lvl;
+            const parentApp = sectionToApp[sel.dataset.section];
+            if (parentApp) bumpApp(parentApp, lvl);
+          }
         });
         if (Object.keys(apps).length > 0) perms._apps = apps;
 
