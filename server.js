@@ -276,6 +276,7 @@ const SECTIONS_BY_APP = {
     { key: "banco", label: "Banco (Credicorp / Yappy / Conciliación)" },
     { key: "recibos_z", label: "Recibos Z" },
     { key: "cierre_caja", label: "Cierre de Caja" },
+    { key: "reportes_caja_menuda", label: "Reportes de Caja Menuda" },
     { key: "pedidosya", label: "PedidosYa" },
     { key: "cajero", label: "Cajero (entrada rápida)" },
     { key: "settings", label: "Configuración" },
