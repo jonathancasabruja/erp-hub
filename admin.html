@@ -246,6 +246,83 @@
         margin-bottom: 14px;
         flex-wrap: wrap;
       }
+      .audit-filters {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        margin-bottom: 16px;
+        padding: 12px;
+        background: var(--bg-soft);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      .audit-filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .audit-filters select,
+      .audit-filters input {
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-family: inherit;
+        font-size: 13px;
+      }
+      .audit-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+      .audit-pill.facturacion { background: rgba(59,130,246,0.15); color: #93c5fd; }
+      .audit-pill.brewery     { background: rgba(245,158,11,0.15); color: #fcd34d; }
+      .audit-pill.compras     { background: rgba(168,85,247,0.15); color: #d8b4fe; }
+      .audit-pill.recibos     { background: rgba(34,197,94,0.15); color: #86efac; }
+      .audit-table-wrap {
+        overflow-x: auto;
+      }
+      .audit-table-wrap table { width: 100%; border-collapse: collapse; }
+      .audit-table-wrap th,
+      .audit-table-wrap td {
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      .audit-table-wrap th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+      }
+      .audit-when { white-space: nowrap; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+      .audit-action { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .audit-details {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: var(--text-dim);
+        max-width: 460px;
+        word-break: break-word;
+      }
+      .audit-pager {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
       .btn {
         background: var(--accent);
         color: #1a1a1a;
@@ -512,6 +589,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="overview">Overview</button>
         <button class="tab" data-tab="users">Usuarios &amp; Permisos</button>
+        <button class="tab" data-tab="auditoria">Auditoría</button>
         <button class="tab" data-tab="junta">Sala de Junta</button>
         <button class="tab" data-tab="playground">Mis Notas</button>
         <button class="tab" data-tab="quick-links">Accesos Rápidos</button>
@@ -563,6 +641,42 @@
             <button class="btn btn-secondary" id="btn-refresh-users">Refrescar</button>
           </div>
           <div id="users-table" class="loading">Cargando usuarios…</div>
+        </div>
+      </div>
+
+      <!-- ─── Auditoría tab ──────────────────────────────────────── -->
+      <div class="tab-panel" data-panel="auditoria">
+        <div class="section">
+          <h2>🔍 Auditoría — Quién hizo qué</h2>
+          <p class="section-sub">
+            Registro de todas las transacciones (creaciones, modificaciones, eliminaciones) en
+            los 4 módulos del ERP. Solo se registran mutaciones; las consultas no aparecen.
+          </p>
+          <div class="audit-filters">
+            <label>Módulo
+              <select id="audit-module">
+                <option value="">Todos</option>
+                <option value="facturacion">Facturación</option>
+                <option value="brewery">Brewery</option>
+                <option value="compras">Compras</option>
+                <option value="recibos">Recibos Banco</option>
+              </select>
+            </label>
+            <label>Usuario
+              <select id="audit-user"><option value="">Todos</option></select>
+            </label>
+            <label>Acción
+              <input type="text" id="audit-action" placeholder="filtra por nombre…" />
+            </label>
+            <label>Desde
+              <input type="date" id="audit-from" />
+            </label>
+            <label>Hasta
+              <input type="date" id="audit-to" />
+            </label>
+            <button class="btn btn-secondary" id="btn-audit-refresh">Refrescar</button>
+          </div>
+          <div id="audit-table" class="loading">Cargando actividad…</div>
         </div>
       </div>
 
@@ -967,7 +1081,137 @@
           if (tab === "users") loadUsers();
           if (tab === "playground") loadNotes();
           if (tab === "junta") loadJunta();
+          if (tab === "auditoria") loadAudit();
         });
+      });
+
+      // ─── Auditoría ───────────────────────────────────────────────
+      const AUDIT_PAGE_SIZE = 100;
+      let auditOffset = 0;
+      let auditUsersLoaded = false;
+
+      async function loadAuditUsersFilter() {
+        if (auditUsersLoaded) return;
+        try {
+          const users = await fetchJson("/api/admin/users");
+          const sel = document.getElementById("audit-user");
+          for (const u of users || []) {
+            const opt = document.createElement("option");
+            opt.value = String(u.id);
+            opt.textContent = u.displayName || u.email;
+            sel.appendChild(opt);
+          }
+          auditUsersLoaded = true;
+        } catch {
+          // non-fatal
+        }
+      }
+
+      function buildAuditUrl() {
+        const params = new URLSearchParams();
+        const m = document.getElementById("audit-module").value;
+        const u = document.getElementById("audit-user").value;
+        const a = document.getElementById("audit-action").value.trim();
+        const f = document.getElementById("audit-from").value;
+        const t = document.getElementById("audit-to").value;
+        if (m) params.set("module", m);
+        if (u) params.set("userId", u);
+        if (a) params.set("action", a);
+        if (f) params.set("from", f);
+        if (t) params.set("to", t);
+        params.set("limit", String(AUDIT_PAGE_SIZE));
+        params.set("offset", String(auditOffset));
+        return "/api/admin/user-activity?" + params.toString();
+      }
+
+      async function loadAudit(reset = true) {
+        if (reset) auditOffset = 0;
+        await loadAuditUsersFilter();
+        const el = document.getElementById("audit-table");
+        el.classList.add("loading");
+        el.textContent = "Cargando…";
+        try {
+          const data = await fetchJson(buildAuditUrl());
+          renderAudit(data);
+        } catch (err) {
+          el.classList.remove("loading");
+          el.innerHTML = '<div class="coming-soon">Error: ' + escapeHtml(err.message) + "</div>";
+        }
+      }
+
+      function renderAudit(data) {
+        const el = document.getElementById("audit-table");
+        el.classList.remove("loading");
+        const rows = data?.rows || [];
+        const total = data?.total ?? rows.length;
+        if (rows.length === 0) {
+          el.innerHTML = '<div class="coming-soon">Sin actividad para los filtros seleccionados.</div>';
+          return;
+        }
+        const fmt = (iso) => {
+          if (!iso) return "—";
+          const d = new Date(iso);
+          // Panama time (UTC-5)
+          const local = new Date(d.getTime() - 5 * 60 * 60 * 1000);
+          return local.toISOString().slice(0, 19).replace("T", " ");
+        };
+        const body = rows
+          .map((r) => {
+            const who = r.userName || r.userEmail || (r.userId ? "user " + r.userId : "—");
+            return `
+              <tr>
+                <td class="audit-when">${escapeHtml(fmt(r.createdAt))}</td>
+                <td><span class="audit-pill ${escapeHtml(r.module)}">${escapeHtml(r.module)}</span></td>
+                <td>${escapeHtml(who)}</td>
+                <td class="audit-action">${escapeHtml(r.action)}</td>
+                <td>${escapeHtml(r.entity || "")}${r.entityId ? " #" + escapeHtml(r.entityId) : ""}</td>
+                <td class="audit-details">${escapeHtml(r.details || "")}</td>
+              </tr>
+            `;
+          })
+          .join("");
+        const showingFrom = auditOffset + 1;
+        const showingTo = auditOffset + rows.length;
+        el.innerHTML = `
+          <div class="audit-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha (PA)</th>
+                  <th>Módulo</th>
+                  <th>Usuario</th>
+                  <th>Acción</th>
+                  <th>Entidad</th>
+                  <th>Detalles</th>
+                </tr>
+              </thead>
+              <tbody>${body}</tbody>
+            </table>
+          </div>
+          <div class="audit-pager">
+            <button class="btn btn-secondary btn-sm" id="audit-prev" ${auditOffset === 0 ? "disabled" : ""}>← Anterior</button>
+            <button class="btn btn-secondary btn-sm" id="audit-next" ${showingTo >= total ? "disabled" : ""}>Siguiente →</button>
+            <span>Mostrando ${showingFrom}–${showingTo} de ${total}</span>
+          </div>
+        `;
+        document.getElementById("audit-prev")?.addEventListener("click", () => {
+          auditOffset = Math.max(0, auditOffset - AUDIT_PAGE_SIZE);
+          loadAudit(false);
+        });
+        document.getElementById("audit-next")?.addEventListener("click", () => {
+          auditOffset += AUDIT_PAGE_SIZE;
+          loadAudit(false);
+        });
+      }
+
+      document.getElementById("btn-audit-refresh").addEventListener("click", () => loadAudit(true));
+      ["audit-module", "audit-user", "audit-from", "audit-to"].forEach((id) => {
+        document.getElementById(id).addEventListener("change", () => loadAudit(true));
+      });
+      let auditActionTimer = null;
+      document.getElementById("audit-action").addEventListener("input", () => {
+        clearTimeout(auditActionTimer);
+        auditActionTimer = setTimeout(() => loadAudit(true), 300);
       });
 
       // ─── Sala de Junta ───────────────────────────────────────────

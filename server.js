@@ -479,6 +479,50 @@ async function publicBoardRoomByToken(token) {
   return row ? { content: row.content || {}, updatedAt: row.updated_at } : null;
 }
 
+/**
+ * Cross-module activity feed for the Auditoría tab. Reads from the shared
+ * `public.user_activity` table that every app writes to via its own tRPC
+ * audit middleware. Supports filtering by module / user / action / date
+ * range and paginates with limit+offset.
+ */
+async function adminUserActivity(query = {}) {
+  const sql = getSql();
+  if (!sql) return null;
+  const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 500);
+  const offset = Math.max(Number(query.offset) || 0, 0);
+  const moduleFilter = typeof query.module === "string" && query.module ? query.module : null;
+  const userId = query.userId ? Number(query.userId) : null;
+  const actionLike = typeof query.action === "string" && query.action ? `%${query.action}%` : null;
+  const fromDate = typeof query.from === "string" && query.from ? query.from : null;
+  const toDate = typeof query.to === "string" && query.to ? query.to : null;
+
+  // postgres-js inlines parameters when passed as values; building the WHERE
+  // clause with conditional fragments keeps everything safely parameterised.
+  const where = sql`
+    WHERE 1=1
+    ${moduleFilter ? sql`AND module = ${moduleFilter}` : sql``}
+    ${userId ? sql`AND user_id = ${userId}` : sql``}
+    ${actionLike ? sql`AND action ILIKE ${actionLike}` : sql``}
+    ${fromDate ? sql`AND created_at >= ${fromDate}::date` : sql``}
+    ${toDate ? sql`AND created_at < (${toDate}::date + INTERVAL '1 day')` : sql``}
+  `;
+
+  const [rows, totalRow] = await Promise.all([
+    sql`
+      SELECT id, module, user_id AS "userId", user_name AS "userName",
+             user_email AS "userEmail", action, entity, entity_id AS "entityId",
+             details, created_at AS "createdAt"
+      FROM public.user_activity
+      ${where}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `,
+    sql`SELECT COUNT(*)::int AS c FROM public.user_activity ${where}`,
+  ]);
+
+  return { rows, total: totalRow[0]?.c ?? 0, limit, offset };
+}
+
 async function adminPoSnapshot() {
   const sql = getSql();
   if (!sql) return null;
@@ -981,6 +1025,7 @@ const server = createServer(async (req, res) => {
           else if (path === "/api/admin/invoice-library-snapshot") data = await adminInvoiceLibrarySnapshot();
           else if (path === "/api/admin/po-snapshot") data = await adminPoSnapshot();
           else if (path === "/api/admin/users") data = await adminListUsers();
+          else if (path === "/api/admin/user-activity") data = await adminUserActivity(Object.fromEntries(url.searchParams));
           else if (path === "/api/admin/board-room") data = await adminBoardRoomGet();
           else if (path === "/api/admin/meta")
             data = {
