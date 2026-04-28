@@ -1360,7 +1360,7 @@
         const perms = {};
         const apps = {};
         const sectionToApp = {};
-        Object.entries(meta.sectionsByApp || {}).forEach(([app, sections]) => {
+        Object.entries(cachedMeta?.sectionsByApp || {}).forEach(([app, sections]) => {
           (sections || []).forEach((s) => { sectionToApp[s.key] = app; });
         });
         const levelRank = { none: 0, view: 1, edit: 2 };
